@@ -1,0 +1,26 @@
+# English interface text for the HOI4 advisor. Rule text (title / advice / why / steps) lives in rules/hoi4.toml.
+# Other languages: copy simp_chinese.toml to <language>.toml (e.g. german.toml) and translate.
+# Anything a translation leaves out falls back to English.
+# Placeholders: {days} = snooze length, {label} = button name, {title} = rule title, {n}/{total} = step numbers.
+
+[ui]
+toggle_tt = "§YAdvisor§!\nOpens the Advisor. A gold badge means it has a recommendation for you."
+close_tt = "Close"
+panel_title = "New Player Advisor"
+panel_subtitle = "§gClick any advice for a step-by-step guide.§!"
+debug_label = "Show all icons"
+debug_tt = "Shows every advisor badge at once, so you can check they line up with the topbar buttons. Click again to go back to normal."
+footer_hint = "§gRight-click a badge to snooze it for {days} days.§!"
+desc_where = "§g({label})§!"
+badge_hint = "§gOn the {label} screen.\nLeft-click: show me how · Right-click: snooze for {days} days§!"
+row_hint = "§gLeft-click: step-by-step guide · Right-click the badge: snooze for {days} days§!"
+snoozed_tt = "§Y{title}§! §g(snoozed)§!\nLeft-click to wake this advice up."
+card_tt = "§gClick for a step-by-step guide§!"
+guide_subtitle = "§gStep-by-step guide§!"
+guide_step = "Step {n} of {total}"
+guide_why = "Why?"
+guide_back = "Back"
+guide_next = "Next"
+guide_done = "Done"
+guide_all = "All advice"
+none_label = "Map"

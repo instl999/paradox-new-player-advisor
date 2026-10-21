@@ -1,0 +1,721 @@
+# New Player Advisor — Hearts of Iron IV rules.
+#
+# Each [[rule]] is one piece of advice. When its `trigger` is true for the player's country:
+#   - a gold badge appears on the `target` topbar button (target = "none": the advice is listed in the panel only)
+#   - the rule shows as active (gold) in the Advisor panel, under its `category` tab
+#   - clicking either one opens a step-by-step guide: `steps`, followed by the `why` explanation
+# `trigger` is plain HOI4 trigger script, evaluated in the player's country scope.
+# `dlc` (optional) names an entry in [dlc]; the rule is hidden entirely for players without that DLC.
+# If several rules point at the same button, only the one with the lowest `priority` shows its badge.
+#
+# Translations live in rules/locale/hoi4/<language>.toml. Run `python tools/build.py hoi4` after editing.
+
+[mod]
+name = "New Player Advisor"
+folder = "new_player_advisor"
+version = "0.2.0"
+supported_version = "1.*"
+prefix = "npa"
+snooze_days = 30
+# Vanilla window the topbar badges are attached to, so they move with the topbar.
+# Set to "" to place them in absolute screen coordinates instead.
+parent_window_token = "top_bar"
+
+# Where the advisor's own button sits (relative to the parent window).
+[toggle]
+x = 8
+y = 100
+
+# Where the guide window opens: offset from the top-right corner of the screen. HOI4's own screens
+# open on the left, so the guide stays readable while you follow its steps. Players can drag it.
+[guide]
+x = -500
+y = 250
+
+# Panel tabs, in display order. Each tab holds at most 10 rules.
+[categories]
+economy = "Economy"
+military = "Military"
+politics = "Politics & Diplomacy"
+dlc = "DLC Features"
+
+# has_dlc names. The installer checks these against the game's dlc folder and reports any mismatch.
+[dlc]
+lar = "La Resistance"
+nsb = "No Step Back"
+bba = "By Blood Alone"
+aat = "Arms Against Tyranny"
+gtd = "Gotterdammerung"
+
+# Badge positions: the top-right corner of each vanilla topbar button. Measured from an in-game
+# screenshot (1920x1080, UI scale 100%). The buttons are 55 px apart in the second topbar row, starting
+# at x = 125. Use "Show all icons" in the Advisor panel to check them. See README.md → "Calibrating badge positions".
+[targets.politics]       # gavel
+label = "Political"
+x = 161
+y = 35
+
+[targets.intelligence]   # eye (La Résistance intelligence agency)
+label = "Intelligence"
+x = 216
+y = 35
+
+[targets.research]       # flask and magnifier
+label = "Research"
+x = 269
+y = 35
+
+[targets.diplomacy]      # papers and pens
+label = "Diplomacy"
+x = 326
+y = 35
+
+[targets.trade]          # circular arrows around crates
+label = "Trade"
+x = 381
+y = 35
+
+[targets.construction]   # crane hook
+label = "Construction"
+x = 436
+y = 35
+
+[targets.production]     # gear
+label = "Production"
+x = 491
+y = 35
+
+[targets.deploy]         # tank with a down arrow
+label = "Recruit & Deploy"
+x = 546
+y = 35
+
+[targets.logistics]      # ruler and set square (identified from the icon, not yet confirmed by hovering)
+label = "Logistics"
+x = 599
+y = 35
+
+[targets.officer_corps]  # officer cap and chess piece (identified from the icon, not yet confirmed by hovering)
+label = "Officer Corps"
+x = 656
+y = 35
+
+# ============================================================================ Economy
+
+[[rule]]
+id = "plan_research"
+category = "economy"
+target = "research"
+priority = 10
+title = "Plan Your Research"
+advice = "Fill every research slot. Start with industry, electronics and infantry weapons."
+why = "Research never pauses. An empty slot is time you lose for good. Industry technology gives you more factory output and faster construction, which helps everything else. Computing (electronics) makes all later research faster."
+steps = [
+  "Click the Research button in the topbar (the one with the gold badge).",
+  "Click each empty research slot and pick a technology. Never leave a slot empty.",
+  "Good first picks: Construction and Production technologies (Industry tab), Computing (Electronics), and Infantry Weapons.",
+  "Avoid technologies whose year is far ahead of today, shown with a red penalty. Technologies with a bonus from a focus or decision research much faster.",
+]
+trigger = '''
+date < 1936.4.1
+'''
+
+[[rule]]
+id = "build_civilian_factories"
+category = "economy"
+target = "construction"
+priority = 10
+title = "Build Civilian Factories"
+advice = "Fill every construction slot with Civilian Factories while you are at peace."
+why = "Civilian factories build everything else, including more factories. Each one you add early makes the rest of your build-up faster. Most players build civilian factories until roughly 1937–38."
+steps = [
+  "Click the Construction button in the topbar (the one with the gold badge).",
+  "In the list of buildings, choose Civilian Factory.",
+  "Click states on the map to queue factories. Prefer states with free building slots and good infrastructure. The tooltip shows the build time.",
+  "Keep the queue long. Each project only gets a limited number of factories, so a short queue leaves factories idle.",
+  "Drag your most important projects to the top of the queue. Projects at the top are built first.",
+]
+trigger = '''
+has_war = no
+date < 1938.1.1
+'''
+
+[[rule]]
+id = "build_military_factories"
+category = "economy"
+target = "construction"
+priority = 20
+title = "Switch to Military Factories"
+advice = "War is close. Put new construction into Military Factories."
+why = "Military factories produce the guns, tanks and planes your army consumes. A new factory takes months to reach full output, so start before the war rather than during it."
+steps = [
+  "Click the Construction button in the topbar.",
+  "Choose Military Factory instead of Civilian Factory.",
+  "Queue them in states with free building slots, and move them to the top of the queue.",
+  "When a factory finishes, open Production and add it to a production line. An unassigned military factory produces nothing.",
+]
+trigger = '''
+OR = {
+	has_war = yes
+	date > 1937.12.31
+	threat > 0.5
+}
+'''
+
+[[rule]]
+id = "infantry_equipment_shortage"
+category = "economy"
+target = "production"
+priority = 10
+title = "Infantry Equipment Is Running Out"
+advice = "Assign more Military Factories to Infantry Equipment."
+why = "Every infantry division needs rifles. If you run out, new divisions can't be trained and units at the front stop being reinforced. This is the most common equipment shortage for new players."
+steps = [
+  "Click the Production button in the topbar.",
+  "Find the Infantry Equipment line. If there isn't one, click Add Production Line and choose Infantry Equipment.",
+  "Click the + on that line to give it more military factories. Take them from less urgent lines if you need to.",
+  "Over the next weeks, check that the stockpile is growing. The Logistics screen shows equipment surplus and deficit.",
+]
+trigger = '''
+stockpile_ratio = { archetype = infantry_equipment ratio < 0.2 }
+'''
+
+[[rule]]
+id = "trade_resources"
+category = "economy"
+target = "trade"
+priority = 20
+title = "Import the Resources You Need"
+advice = "Production lines short of steel, aluminium or rubber work slowly. Buy what is missing."
+why = "Every piece of equipment needs resources. A production line that is missing a resource loses a large part of its output. Imports cost civilian factories, so buy only what your lines actually need."
+steps = [
+  "Click the Production button and look for red resource icons on your lines. Those lines are short of resources.",
+  "Click the Trade button and select the missing resource on the left (steel, aluminium, rubber, tungsten, chromium or oil).",
+  "Pick a country that sells it and click to import. Friendly countries with large surpluses are best.",
+  "Check your civilian factories: each import uses some of them, so too many imports slow construction.",
+]
+trigger = '''
+has_war = no
+date < 1936.7.1
+'''
+
+[[rule]]
+id = "low_fuel"
+category = "economy"
+target = "trade"
+priority = 10
+title = "Fuel Is Low"
+advice = "Import oil, or build Synthetic Refineries / Fuel Silos."
+why = "Tanks, planes and ships fight badly without fuel. Each unit of oil you import or produce is turned into fuel."
+steps = [
+  "Click the Trade button and select Oil.",
+  "Import oil from a country that sells it. Every unit you import becomes fuel.",
+  "In Construction, build Synthetic Refineries if you have researched them (Industry tab). They make oil from nothing.",
+  "Cut waste: take idle planes off missions and keep ships in port when they have nothing to do.",
+]
+trigger = '''
+has_war = yes
+fuel_ratio < 0.25
+'''
+
+[[rule]]
+id = "economy_partial_mobilisation"
+category = "economy"
+target = "politics"
+priority = 10
+title = "Mobilise Your Economy"
+advice = "Change the Economy law to Partial Mobilisation (if it is available to you)."
+why = "Civilian Economy uses a large share of your factories to make consumer goods. Partial Mobilisation frees many of them, and also builds and produces faster. It is one of the best early uses of political power."
+steps = [
+  "Click the Political button in the topbar.",
+  "In the laws section, click the Economy law (it currently says Civilian Economy or Early Mobilisation).",
+  "Pick Partial Mobilisation. Hover over it first to see the political power cost and the requirements.",
+  "If it's greyed out, the tooltip shows what is missing, often war support or world tension. Try again later.",
+]
+trigger = '''
+OR = {
+	has_idea = civilian_economy
+	has_idea = low_economic_mobilisation
+}
+has_political_power > 150
+OR = {
+	has_war = yes
+	threat > 0.25
+	date > 1936.12.31
+}
+'''
+
+[[rule]]
+id = "economy_war_economy"
+category = "economy"
+target = "politics"
+priority = 15
+title = "Move to War Economy"
+advice = "You are at war: change the Economy law to War Economy."
+why = "War Economy cuts consumer goods even further and raises military output. It costs political power, but it is almost always worth it once the shooting starts."
+steps = [
+  "Click the Political button in the topbar.",
+  "Click the Economy law (Partial Mobilisation).",
+  "Pick War Economy and confirm.",
+  "Your freed factories now appear in Construction and Production. Give them work.",
+]
+trigger = '''
+has_war = yes
+has_idea = partial_economic_mobilisation
+has_political_power > 150
+'''
+
+# ============================================================================ Military
+
+[[rule]]
+id = "front_collapsing"
+category = "military"
+target = "deploy"
+priority = 5
+title = "Your Defences Are Collapsing"
+advice = "Shorten the front: retreat to rivers or forts and add reserves."
+why = "Your surrender progress is climbing. Rivers, forts and narrow fronts multiply your defence. A short line you can hold is better than a long one that breaks."
+steps = [
+  "On the map, find where your line is breaking: battles your side is losing and enemy arrows.",
+  "Look behind the front for a better line: rivers, mountains, marshes, forts, or a narrow stretch of land.",
+  "Select your army, draw a new Front Line along that line, and let the divisions fall back to it.",
+  "Put spare divisions in reserve behind weak spots, and train more in Recruit & Deploy.",
+]
+trigger = '''
+has_war = yes
+surrender_progress > 0.15
+'''
+
+[[rule]]
+id = "small_army"
+category = "military"
+target = "deploy"
+priority = 10
+title = "Train More Divisions"
+advice = "Tension is rising and your army is small. Queue more divisions."
+why = "Divisions take months to train. Training them before a war starts means they are ready when you need them. Infantry divisions are cheap and are enough to hold a front line."
+steps = [
+  "Click the Recruit & Deploy button in the topbar.",
+  "Pick a template (the standard infantry division is fine), choose how many, and click Train.",
+  "The training queue shows missing equipment or manpower. Fix those first if they are red.",
+  "When they finish, deploy them and add them to an army so they can be given orders.",
+]
+trigger = '''
+has_army_size = { size < 24 }
+OR = {
+	has_war = yes
+	threat > 0.25
+}
+'''
+
+[[rule]]
+id = "use_army_experience"
+category = "military"
+target = "deploy"
+priority = 30
+title = "Improve Your Division Template"
+advice = "Spend Army Experience in the division designer."
+why = "Army experience can redesign division templates. Support companies (engineers, recon, artillery) make a division much stronger for little cost."
+steps = [
+  "Click the Recruit & Deploy button and open the division designer (the edit icon next to a template).",
+  "Add support companies in the left column. Engineers and Artillery are good first choices.",
+  "In the main grid, a solid defensive division is mostly infantry with one or two artillery battalions.",
+  "Save the template. Existing divisions upgrade gradually as the new equipment arrives.",
+]
+trigger = '''
+has_army_experience > 50
+'''
+
+[[rule]]
+id = "use_battle_plans"
+category = "military"
+target = "none"
+priority = 10
+title = "Use Battle Plans"
+advice = "Put your divisions in armies and give them front lines and offensive arrows."
+why = "Battle plans let generals move dozens of divisions at once. Divisions that wait in a plan gain planning bonuses, so a prepared attack hits far harder than one ordered by hand."
+steps = [
+  "Select some divisions on the map, then click Create Army at the bottom of the screen. A general is assigned automatically.",
+  "With the army selected, choose the Front Line tool and draw it along the border with the enemy.",
+  "To attack, choose the Offensive Line tool and draw an arrow from the front into enemy territory.",
+  "Wait until the planning bar fills up, then press Execute.",
+  "Keep a few divisions back as reserves to plug holes.",
+]
+trigger = '''
+has_war = yes
+'''
+
+[[rule]]
+id = "check_supply"
+category = "military"
+target = "logistics"
+priority = 10
+title = "Keep Your Army Supplied"
+advice = "Check the Supply map mode. Divisions out of supply lose strength fast."
+why = "Divisions get supplies through supply hubs and railways. Out of supply, they lose organisation and attack poorly. This is the most common reason an offensive stalls."
+steps = [
+  "Switch the map to Supply map mode (map mode buttons at the bottom right).",
+  "Red and orange areas are short of supply. Units marked with a supply warning are suffering.",
+  "In Construction, build Railways from your capital toward the front, and Supply Hubs close to the front.",
+  "Don't push far beyond your supply network. Wait for railways to catch up.",
+]
+trigger = '''
+has_war = yes
+'''
+
+[[rule]]
+id = "air_superiority"
+category = "military"
+target = "production"
+priority = 20
+title = "Fight for the Skies"
+advice = "Build fighters and put them on Air Superiority over the front."
+why = "If the enemy controls the air, your divisions move slowly and take extra damage. Fighters on Air Superiority missions are the counter."
+steps = [
+  "Click the Production button and add a production line for Fighters.",
+  "Open the air map mode and find an air base close to the front.",
+  "Move your fighter wings to that base and give them the Air Superiority mission over the front's region.",
+  "Watch the region's air superiority meter. Once you are winning, add close air support (CAS) to help your divisions.",
+]
+trigger = '''
+has_war = yes
+has_deployed_air_force_size = { size < 100 type = fighter }
+'''
+
+[[rule]]
+id = "protect_convoys"
+category = "military"
+target = "none"
+priority = 10
+title = "Your Convoys Are Under Attack"
+advice = "Escort your convoys or change trade routes."
+why = "Convoys carry your imports and supply your troops overseas. When enemy submarines and ships sink them, both stop. Escorts and more convoys keep goods flowing."
+steps = [
+  "Click the Production button and add a production line for Convoys to replace losses.",
+  "Select a naval task force of destroyers and give it the Convoy Escort mission in the dangerous sea region.",
+  "In Trade, prefer suppliers whose routes avoid enemy waters.",
+  "Later, research naval technologies that improve convoy escort and anti-submarine warfare.",
+]
+trigger = '''
+convoy_threat > 0.3
+'''
+
+[[rule]]
+id = "conscription_peace"
+category = "military"
+target = "politics"
+priority = 20
+title = "Raise Conscription"
+advice = "Manpower is low. Change the Conscription law to Limited Conscription."
+why = "Manpower is the pool of people you can draft into divisions. Volunteer Only gives you very little of it. Limited Conscription increases it a lot."
+steps = [
+  "Click the Political button in the topbar.",
+  "Click the Conscription law.",
+  "Pick Limited Conscription. Hover over it first to see the cost.",
+  "Manpower grows gradually over the following weeks.",
+]
+trigger = '''
+OR = {
+	has_idea = disarmed_nation
+	has_idea = volunteer_only
+}
+has_manpower < 20000
+has_political_power > 100
+'''
+
+[[rule]]
+id = "conscription_war"
+category = "military"
+target = "politics"
+priority = 25
+title = "Expand Conscription"
+advice = "You are at war and short of manpower. Change the law to Extensive Conscription."
+why = "A wartime army loses men quickly. Extensive Conscription lets you draft more people, at a small cost to factory output."
+steps = [
+  "Click the Political button in the topbar.",
+  "Click the Conscription law (Limited Conscription).",
+  "Pick Extensive Conscription and confirm.",
+  "If it is greyed out, the tooltip shows the war support it needs.",
+]
+trigger = '''
+has_war = yes
+has_idea = limited_conscription
+has_manpower < 20000
+has_political_power > 100
+'''
+
+# ============================================================================ Politics & Diplomacy
+
+[[rule]]
+id = "pick_focus"
+category = "politics"
+target = "politics"
+priority = 5
+title = "Choose a National Focus"
+advice = "Always keep a national focus running. Early on, pick ones that give factories or political power."
+why = "National focuses are your country's long-term plan. They give factories, research bonuses, political power and unique events. A day without a focus is a day lost."
+steps = [
+  "Click the National Focus button at the top left, next to your flag.",
+  "Hover over focuses to see what they do and how many days they take.",
+  "Early on, prefer focuses that give political power, factories or research bonuses.",
+  "When a focus finishes, pick the next one right away.",
+]
+trigger = '''
+date < 1936.2.1
+'''
+
+[[rule]]
+id = "spend_political_power"
+category = "politics"
+target = "politics"
+priority = 50
+title = "Spend Your Political Power"
+advice = "You have saved a lot of Political Power. Hire an advisor or change a law."
+why = "Political power that sits unspent is wasted. Good uses: a political advisor or industry designer, economy and trade laws, or the decisions available to your country."
+steps = [
+  "Click the Political button in the topbar.",
+  "Fill empty advisor slots. Industry concerns and political advisors that add political power or factory output are strong early.",
+  "Or change a law: Economy and Trade laws usually pay off the most.",
+  "Check Decisions too. Many give factories or resources for political power.",
+]
+trigger = '''
+has_political_power > 300
+'''
+
+[[rule]]
+id = "low_stability"
+category = "politics"
+target = "politics"
+priority = 30
+title = "Stability Is Low"
+advice = "Raise stability with national spirits, focuses or advisors."
+why = "Low stability slows factory output and can cause unrest. Look for focuses and political advisors that add stability, and avoid laws that lower it."
+steps = [
+  "Hover over the Stability number in the topbar to see what is lowering it.",
+  "Click the Political button and look for advisors that add stability.",
+  "Check your focus tree and Decisions for options that raise stability.",
+  "Avoid new laws that lower stability until it recovers.",
+]
+trigger = '''
+has_stability < 0.4
+'''
+
+[[rule]]
+id = "low_war_support"
+category = "politics"
+target = "politics"
+priority = 35
+title = "War Support Is Low"
+advice = "Raise war support. It unlocks stronger economy and conscription laws."
+why = "War support decides which laws you can pick and how well your people endure losses. Low war support blocks mobilisation laws and makes your country easier to defeat."
+steps = [
+  "Hover over the War Support number in the topbar to see what affects it.",
+  "Click the Political button and look for advisors that add war support (such as propaganda ministers).",
+  "Look for focuses and decisions that raise war support.",
+  "World tension rising, and being at war, also raise it over time.",
+]
+trigger = '''
+has_war_support < 0.3
+OR = {
+	has_war = yes
+	threat > 0.3
+}
+'''
+
+[[rule]]
+id = "check_decisions"
+category = "politics"
+target = "politics"
+priority = 40
+title = "Look at Your Decisions"
+advice = "Decisions can give factories, resources and political power. Check them regularly."
+why = "Many countries have decisions that give a big boost: new factories, resource rights, or stability. Some are only available for a limited time."
+steps = [
+  "Click the Political button in the topbar, then Decisions.",
+  "Expand each category and hover over decisions to see the cost and the reward.",
+  "Take decisions that pay off quickly: factories, resources, or relief for a national problem.",
+  "Check back every few months. New decisions unlock as your focuses progress.",
+]
+trigger = '''
+date < 1936.3.1
+'''
+
+[[rule]]
+id = "seek_faction"
+category = "politics"
+target = "diplomacy"
+priority = 10
+title = "Look for Allies"
+advice = "The world is getting dangerous. Consider joining a faction."
+why = "A small country on its own is an easy target. When world tension is high, a faction that shares your ideology may accept you, and then its members will defend you."
+steps = [
+  "Click a faction leader's country on the map (or use the Diplomacy screen).",
+  "Choose Join Faction. Hover over it to see whether they would accept and why.",
+  "If they won't, improve relations first, or ask a major power for a guarantee.",
+  "Countries that share your ideology are much more likely to say yes.",
+]
+trigger = '''
+has_war = no
+is_major = no
+is_in_faction = no
+threat > 0.5
+'''
+
+# ============================================================================ DLC features
+
+[[rule]]
+id = "found_intelligence_agency"
+category = "dlc"
+dlc = "lar"
+target = "intelligence"
+priority = 10
+title = "Found an Intelligence Agency"
+advice = "Create an Intelligence Agency to unlock spies, code cracking and intel."
+why = "The agency (La Résistance) lets you recruit operatives, build spy networks, steal blueprints, and see enemy divisions through better intel. It is cheap early and pays off for the whole game."
+steps = [
+  "Click the Intelligence button in the topbar (the eye icon).",
+  "Click Create Agency. The tooltip shows its cost.",
+  "Recruit your first operative in the agency screen.",
+  "Pick agency upgrades over time. They use civilian factories while being built.",
+]
+trigger = '''
+has_intelligence_agency = no
+num_of_civilian_factories > 15
+'''
+
+[[rule]]
+id = "use_intelligence_agency"
+category = "dlc"
+dlc = "lar"
+target = "intelligence"
+priority = 20
+title = "Put Your Spies to Work"
+advice = "Build an intel network in your enemy and run operations."
+why = "An intel network reveals the enemy's divisions and lets you run operations such as stealing blueprints or infiltrating their army. Better intel also improves your planning against them."
+steps = [
+  "Click the Intelligence button (the eye icon) and select an operative.",
+  "Choose Build Intel Network and target an enemy state, ideally near the front or their capital.",
+  "When network strength is high enough, start an operation. Hover over each one for its requirements.",
+  "Recruit more operatives as your agency grows.",
+]
+trigger = '''
+has_intelligence_agency = yes
+has_war = yes
+'''
+
+[[rule]]
+id = "design_tanks"
+category = "dlc"
+dlc = "nsb"
+target = "production"
+priority = 40
+title = "Design Your First Tank"
+advice = "Use the tank designer to build a cheap, reliable tank."
+why = "With No Step Back you design tanks from a chassis and modules. A cheap design with good reliability that you can build in numbers beats an expensive design you can't."
+steps = [
+  "Click the Production button, then open the Design screen and choose a tank chassis.",
+  "Fill the slots: a main gun, an engine, armour, and useful extras such as radio.",
+  "Watch the cost and reliability numbers. Keep the tank affordable.",
+  "Save the design, then add a production line for it.",
+]
+trigger = '''
+has_war = no
+date > 1936.12.31
+num_of_military_factories > 10
+'''
+
+[[rule]]
+id = "officer_corps"
+category = "dlc"
+dlc = "nsb"
+target = "officer_corps"
+priority = 10
+title = "Use Your Command Power"
+advice = "Pick army spirits and fill high command with your command power."
+why = "Command power builds up and is wasted at the cap. Army spirits (No Step Back) and high command members give permanent bonuses to your whole army."
+steps = [
+  "Click the Officer Corps button in the topbar (the officer cap).",
+  "Pick an Army Spirit. Defensive spirits help new players most.",
+  "Fill empty high command slots (Chief of Army and others) with useful bonuses.",
+  "Keep some command power for generals' traits and promotions.",
+]
+trigger = '''
+command_power > 60
+'''
+
+[[rule]]
+id = "design_planes"
+category = "dlc"
+dlc = "bba"
+target = "production"
+priority = 50
+title = "Design Better Aircraft"
+advice = "Spend air experience in the aircraft designer."
+why = "With By Blood Alone you design aircraft from an airframe and modules. A fighter with more guns and a better engine wins air battles, and air battles decide land battles."
+steps = [
+  "Click the Production button, open the Design screen and choose an airframe.",
+  "For fighters: add guns and the best engine you have. Keep enough range to reach the front.",
+  "Save the design and switch your fighter production line to it.",
+  "Research new airframes over time; each one unlocks better designs.",
+]
+trigger = '''
+has_air_experience > 50
+'''
+
+[[rule]]
+id = "hire_mios"
+category = "dlc"
+dlc = "aat"
+target = "production"
+priority = 60
+title = "Work With Military-Industrial Organisations"
+advice = "Assign MIOs to your production lines for free bonuses."
+why = "In Arms Against Tyranny, Military-Industrial Organisations (MIOs) improve the equipment they make. Assign one to each important production line. The MIO grows and unlocks more traits."
+steps = [
+  "Click the Production button and open the Military-Industrial Organisations panel.",
+  "Pick an MIO for each major equipment type: infantry equipment, artillery, tanks, aircraft.",
+  "Assign your production lines to that MIO.",
+  "As the MIO gains size, unlock traits. Pick ones that lower cost or raise reliability.",
+]
+trigger = '''
+num_of_military_factories > 8
+date < 1937.1.1
+'''
+
+[[rule]]
+id = "special_projects"
+category = "dlc"
+dlc = "gtd"
+target = "research"
+priority = 30
+title = "Start a Special Project"
+advice = "Major powers can run special projects: jet engines, rockets, and more."
+why = "Special projects (Götterdämmerung) are long programmes run by scientists in facilities. They unlock unique weapons and bonuses that normal research can't give."
+steps = [
+  "Click the Research button and open Special Projects.",
+  "Build the facility the project needs. The project screen shows which states can host it.",
+  "Assign a scientist and start the project.",
+  "Check its progress now and then, and add resources when the project asks for them.",
+]
+trigger = '''
+is_major = yes
+date > 1936.6.1
+'''
+
+[[rule]]
+id = "gain_autonomy"
+category = "dlc"
+target = "diplomacy"
+priority = 20
+title = "Gain Autonomy From Your Overlord"
+advice = "As a subject, contribute troops and factories to earn more autonomy."
+why = "Subjects (Together for Victory, now free) gain autonomy by helping their overlord: sending equipment, fighting in its wars, and building industry. With enough autonomy you become independent."
+steps = [
+  "Hover over the autonomy bar on your overlord's country screen to see what raises it.",
+  "Send equipment through lend-lease and fight alongside your overlord in its wars.",
+  "Build factories, since a stronger economy gains autonomy faster.",
+  "When the bar is full, you can ask to move to a freer subject level, and finally to independence.",
+]
+trigger = '''
+is_subject = yes
+'''
