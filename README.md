@@ -105,6 +105,16 @@ file for every HOI4 language. The texts come from `rules/locale/hoi4/<language>.
 - To add a language, copy `simp_chinese.toml` to `german.toml`, `french.toml`, etc. and translate it. Anything left
   out shows in English.
 
+## Download
+
+Players can get the ready-made installer from the
+[Releases page](https://github.com/instl999/paradox-new-player-advisor/releases/latest): download the zip, unzip it,
+and double-click **Install.bat**. Python is not needed.
+
+## License
+
+[MIT](LICENSE). You are free to use, change and share this mod; keep the copyright notice.
+
 ## Roadmap
 
 - **Victoria 3 output step.** It will use the same rule format, with Vic3 triggers and its own GUI system (Vic3 uses

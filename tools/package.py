@@ -53,6 +53,7 @@ def package(game, build_root, mod, dlc_names=()):
         z.writestr(f"{top}/Uninstall.bat", BAT.format(args="-Uninstall").replace("\n", "\r\n"))
         z.writestr(f"{top}/README.txt", README.format(name=mod["name"], version=mod["version"],
                                                       days=mod["snooze_days"]).replace("\n", "\r\n"))
+        z.write(os.path.join(ROOT, "LICENSE"), f"{top}/LICENSE.txt")
         z.writestr(f"{top}/files/install.ps1", script.replace("\r\n", "\n").replace("\n", "\r\n"))
         z.write(os.path.join(build_root, folder + ".mod"), f"{top}/files/{folder}.mod")
         mod_dir = os.path.join(build_root, folder)
