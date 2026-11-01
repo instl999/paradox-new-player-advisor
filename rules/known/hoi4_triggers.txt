@@ -1,0 +1,78 @@
+# Hearts of Iron IV triggers the rules may use. tools/lint.py rejects any other trigger name in rules/hoi4.toml.
+# Add a trigger here only after checking it in one of these sources, and note which:
+#   wiki  = https://hoi4.paradoxwikis.com/Triggers
+#   tiger = tiger-lib trigger table (built from the game's triggers_documentation.md, HOI4 1.16.4)
+#   kr    = used in this exact form in Kaiserreich or Millennium Dawn script
+# `@scope` marks a scope change whose block holds more triggers.
+
+# ---- country state
+has_war                                  # wiki
+has_offensive_war                        # wiki
+has_defensive_war                        # wiki
+has_war_with                             # wiki
+has_capitulated                          # wiki
+surrender_progress                       # wiki, 0–1
+is_major                                 # wiki
+is_subject                               # wiki
+is_in_faction                            # wiki
+is_faction_leader                        # wiki
+has_government                           # wiki
+threat                                   # wiki, world tension 0–1, any scope
+date                                     # wiki
+has_dlc                                  # wiki; names: La Resistance, No Step Back, By Blood Alone, Arms Against Tyranny, Gotterdammerung
+has_idea                                 # wiki; law ideas checked in kr 00 Laws.txt
+has_country_flag                         # wiki
+check_variable                           # wiki
+amount_taken_ideas                       # wiki, { amount < 3 slots = { political_advisor } }
+
+# ---- economy
+num_of_civilian_factories                # wiki
+num_of_military_factories                # wiki
+num_of_naval_factories                   # wiki
+num_of_factories                         # wiki
+num_of_civilian_factories_available_for_projects  # wiki
+num_researched_technologies              # wiki
+amount_research_slots                    # wiki
+has_tech                                 # wiki
+is_researching_technology                # wiki
+stockpile_ratio                          # wiki, { archetype = infantry_equipment ratio < 0.2 }; kr
+has_equipment                            # wiki, { infantry_equipment > 10 }
+fuel_ratio                               # wiki, 0–1
+has_fuel                                 # wiki
+has_resources_in_country                 # wiki
+convoy_threat                            # wiki, 0–1
+has_political_power                      # wiki
+political_power_daily                    # wiki
+has_stability                            # wiki, 0–1
+has_war_support                          # wiki, 0–1
+
+# ---- military
+has_manpower                             # wiki (use < or >)
+has_army_manpower                        # wiki
+amount_manpower_in_deployment_queue      # wiki (use < or >)
+has_army_size                            # wiki, { size < 24 }
+num_divisions                            # wiki
+has_deployed_air_force_size              # wiki, { size < 100 type = fighter }; kr
+has_army_experience                      # wiki
+has_air_experience                       # wiki
+has_navy_experience                      # wiki
+command_power                            # wiki
+fighting_army_strength_ratio             # wiki (1.15+)
+
+# ---- DLC systems
+has_intelligence_agency                  # wiki (1.9+, La Resistance)
+num_free_operative_slots                 # wiki (La Resistance)
+
+# ---- focus
+has_completed_focus                      # wiki
+focus_progress                           # wiki
+has_focus_tree                           # wiki
+
+# ---- scopes
+any_enemy_country @scope                 # wiki
+any_allied_country @scope                # wiki
+any_owned_state @scope                   # wiki
+any_controlled_state @scope              # wiki
+any_neighbor_country @scope              # wiki
+capital_scope @scope                     # wiki
+overlord @scope                          # wiki

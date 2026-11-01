@@ -1,0 +1,36 @@
+# English interface text for the Victoria 3 advisor. Rule text (title / advice / why / steps) lives in rules/vic3.toml.
+# Other languages: copy simp_chinese.toml to <language>.toml (e.g. german.toml) and translate.
+# Anything a translation leaves out falls back to English.
+# Placeholders: {days} = snooze length, {label} = button name, {title} = rule title, {n}/{total} = step numbers.
+# Formatting: #header ... #! (title style), #v ... #! (highlight), #instruction ... #! (click hints).
+
+[ui]
+toggle_tt = "#header Advisor#!\nOpens the Advisor. A gold badge means it has a recommendation for you."
+close_tt = "Close"
+panel_title = "New Player Advisor"
+panel_subtitle = "#instruction Click any advice for a step-by-step guide.#!"
+debug_label = "Show all icons"
+debug_tt = "Shows every advisor badge and highlight at once, so you can check they line up with the sidebar buttons. Click again to go back to normal."
+footer_hint = "#instruction Right-click a badge to snooze it for {days} days.#!"
+hide_next_label = "Next-move bar"
+hide_next_tt = "Shows or hides the #v Do this next#! bar beside the Advisor button. It names the single most useful thing to do right now."
+banner_none = "#v Nothing urgent right now.#! Keep the game running; new advice appears as things change."
+desc_where = "#instruction ({label})#!"
+badge_hint = "#instruction On the {label} screen.\nLeft-click: show me how · Right-click: snooze for {days} days#!"
+row_hint = "#instruction Left-click: step-by-step guide · Right-click the badge: snooze for {days} days#!"
+snoozed_tt = "#header {title}#! (snoozed)\nLeft-click to wake this advice up."
+card_tt = "#instruction Click for a step-by-step guide#!"
+next_prefix = "Do this next:"
+next_hint = "#instruction On the {label} screen.\nLeft-click: show me how · Right-click: snooze for {days} days#!"
+guide_subtitle = "#instruction Step-by-step guide#!"
+guide_step = "Step {n} of {total}"
+guide_why = "Why?"
+guide_back = "Back"
+guide_next = "Next"
+guide_done = "Done"
+guide_all = "All advice"
+guide_open = "Open screen"
+guide_open_tt = "Opens the {label} screen for you."
+alert_prefix = "Advisor:"
+alert_action = "{label}"
+none_label = "Map"

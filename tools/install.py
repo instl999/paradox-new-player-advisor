@@ -25,5 +25,8 @@ def install(game, build_root, folder, game_dir=None):
     if os.path.isdir(dest):
         shutil.rmtree(dest)
     shutil.copytree(os.path.join(build_root, folder), dest)
-    shutil.copy2(os.path.join(build_root, folder + ".mod"), os.path.join(mod_root, folder + ".mod"))
+    # HOI4 needs a <folder>.mod descriptor beside the folder; Victoria 3 reads .metadata/ inside it.
+    descriptor = os.path.join(build_root, folder + ".mod")
+    if os.path.exists(descriptor):
+        shutil.copy2(descriptor, os.path.join(mod_root, folder + ".mod"))
     return dest

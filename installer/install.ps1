@@ -1,11 +1,11 @@
-# Installs (or removes, with -Uninstall) the mod into the Hearts of Iron IV user mod folder.
-# __MOD_FOLDER__ and __MOD_NAME__ are filled in by tools/package.py.
+# Installs (or removes, with -Uninstall) the mod into the game's user mod folder.
+# __MOD_FOLDER__, __MOD_NAME__, __GAME_FOLDER__ and __DLC_NAMES__ are filled in by tools/package.py.
 param([switch]$Uninstall)
 
 $ErrorActionPreference = 'Stop'
 $ModFolder = '__MOD_FOLDER__'
 $ModName = '__MOD_NAME__'
-$GameFolder = 'Hearts of Iron IV'
+$GameFolder = '__GAME_FOLDER__'
 $DlcNames = @(__DLC_NAMES__)
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -72,7 +72,9 @@ function Find-GameDir {
 
 $modRoot = Join-Path (Find-GameDir) 'mod'
 $dest = Join-Path $modRoot $ModFolder
+# HOI4 finds mods through a <folder>.mod descriptor next to the folder; Victoria 3 reads .metadata inside it.
 $descriptor = Join-Path $modRoot "$ModFolder.mod"
+$hasDescriptor = Test-Path (Join-Path $Here "$ModFolder.mod")
 
 if ($Uninstall) {
     if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
@@ -84,10 +86,12 @@ if ($Uninstall) {
 New-Item -ItemType Directory -Force $modRoot | Out-Null
 if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }   # replace an older version cleanly
 Copy-Item -Recurse (Join-Path $Here $ModFolder) $dest
-Copy-Item -Force (Join-Path $Here "$ModFolder.mod") $descriptor
+if ($hasDescriptor) { Copy-Item -Force (Join-Path $Here "$ModFolder.mod") $descriptor }
 
 Write-Host ""
-try { Write-DlcReport (Join-Path $dest 'dlc_check.txt') } catch { Write-Host "DLC check skipped: $_" }
+if ($DlcNames.Count -gt 0) {
+    try { Write-DlcReport (Join-Path $dest 'dlc_check.txt') } catch { Write-Host "DLC check skipped: $_" }
+}
 
 Write-Host ""
 Write-Host "$ModName installed to:"

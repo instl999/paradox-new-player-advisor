@@ -22,6 +22,11 @@ guide_back = "上一步"
 guide_next = "下一步"
 guide_done = "完成"
 guide_all = "全部建议"
+hide_next_label = "下一步提示条"
+hide_next_tt = "显示或隐藏顾问按钮旁的§Y下一步§!提示条。它会给出当前最值得做的一件事。"
+banner_none = "§G目前没有紧急事项。§!继续游戏即可，局势变化时会出现新的建议。"
+next_prefix = "下一步："
+next_hint = "§g位于「{label}」界面。\n左键：教我怎么做 · 右键：暂缓 {days} 天§!"
 none_label = "地图"
 
 [categories]

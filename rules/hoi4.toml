@@ -6,14 +6,18 @@
 #   - clicking either one opens a step-by-step guide: `steps`, followed by the `why` explanation
 # `trigger` is plain HOI4 trigger script, evaluated in the player's country scope.
 # `dlc` (optional) names an entry in [dlc]; the rule is hidden entirely for players without that DLC.
-# If several rules point at the same button, only the one with the lowest `priority` shows its badge.
+# `priority` is one global order (lower = more important), in the bands of docs/DESIGN.md §4.2:
+#   1–19 emergency · 20–39 idle capacity · 40–59 core economy · 60–79 strengthening · 80–99 refinement / DLC.
+# The active rule with the lowest priority is "Do this next". Per button, only the lowest one shows its badge.
+# Always-on reminders (e.g. "use battle plans" during any war) go late in their band so they never hide a
+# concrete problem.
 #
 # Translations live in rules/locale/hoi4/<language>.toml. Run `python tools/build.py hoi4` after editing.
 
 [mod]
 name = "New Player Advisor"
 folder = "new_player_advisor"
-version = "0.2.0"
+version = "0.3.0"
 supported_version = "1.*"
 prefix = "npa"
 snooze_days = 30
@@ -50,6 +54,8 @@ gtd = "Gotterdammerung"
 # Badge positions: the top-right corner of each vanilla topbar button. Measured from an in-game
 # screenshot (1920x1080, UI scale 100%). The buttons are 55 px apart in the second topbar row, starting
 # at x = 125. Use "Show all icons" in the Advisor panel to check them. See README.md → "Calibrating badge positions".
+# Without La Resistance there is no Intelligence button, and vanilla topbar.gui moves the buttons after it
+# 55 px left. `x_without_dlc` is used then (only while `without_dlc` is not owned).
 [targets.politics]       # gavel
 label = "Political"
 x = 161
@@ -59,46 +65,63 @@ y = 35
 label = "Intelligence"
 x = 216
 y = 35
+requires_dlc = "lar"   # the button only exists with La Resistance
 
 [targets.research]       # flask and magnifier
 label = "Research"
 x = 269
 y = 35
+without_dlc = "lar"
+x_without_dlc = 214
 
 [targets.diplomacy]      # papers and pens
 label = "Diplomacy"
 x = 326
 y = 35
+without_dlc = "lar"
+x_without_dlc = 271
 
 [targets.trade]          # circular arrows around crates
 label = "Trade"
 x = 381
 y = 35
+without_dlc = "lar"
+x_without_dlc = 326
 
 [targets.construction]   # crane hook
 label = "Construction"
 x = 436
 y = 35
+without_dlc = "lar"
+x_without_dlc = 381
 
 [targets.production]     # gear
 label = "Production"
 x = 491
 y = 35
+without_dlc = "lar"
+x_without_dlc = 436
 
 [targets.deploy]         # tank with a down arrow
 label = "Recruit & Deploy"
 x = 546
 y = 35
+without_dlc = "lar"
+x_without_dlc = 491
 
 [targets.logistics]      # ruler and set square (identified from the icon, not yet confirmed by hovering)
 label = "Logistics"
 x = 599
 y = 35
+without_dlc = "lar"
+x_without_dlc = 544
 
 [targets.officer_corps]  # officer cap and chess piece (identified from the icon, not yet confirmed by hovering)
 label = "Officer Corps"
 x = 656
 y = 35
+without_dlc = "lar"
+x_without_dlc = 601
 
 # ============================================================================ Economy
 
@@ -106,7 +129,7 @@ y = 35
 id = "plan_research"
 category = "economy"
 target = "research"
-priority = 10
+priority = 22
 title = "Plan Your Research"
 advice = "Fill every research slot. Start with industry, electronics and infantry weapons."
 why = "Research never pauses. An empty slot is time you lose for good. Industry technology gives you more factory output and faster construction, which helps everything else. Computing (electronics) makes all later research faster."
@@ -124,7 +147,7 @@ date < 1936.4.1
 id = "build_civilian_factories"
 category = "economy"
 target = "construction"
-priority = 10
+priority = 40
 title = "Build Civilian Factories"
 advice = "Fill every construction slot with Civilian Factories while you are at peace."
 why = "Civilian factories build everything else, including more factories. Each one you add early makes the rest of your build-up faster. Most players build civilian factories until roughly 1937–38."
@@ -144,7 +167,7 @@ date < 1938.1.1
 id = "build_military_factories"
 category = "economy"
 target = "construction"
-priority = 20
+priority = 45
 title = "Switch to Military Factories"
 advice = "War is close. Put new construction into Military Factories."
 why = "Military factories produce the guns, tanks and planes your army consumes. A new factory takes months to reach full output, so start before the war rather than during it."
@@ -184,7 +207,7 @@ stockpile_ratio = { archetype = infantry_equipment ratio < 0.2 }
 id = "trade_resources"
 category = "economy"
 target = "trade"
-priority = 20
+priority = 50
 title = "Import the Resources You Need"
 advice = "Production lines short of steel, aluminium or rubber work slowly. Buy what is missing."
 why = "Every piece of equipment needs resources. A production line that is missing a resource loses a large part of its output. Imports cost civilian factories, so buy only what your lines actually need."
@@ -203,7 +226,7 @@ date < 1936.7.1
 id = "low_fuel"
 category = "economy"
 target = "trade"
-priority = 10
+priority = 15
 title = "Fuel Is Low"
 advice = "Import oil, or build Synthetic Refineries / Fuel Silos."
 why = "Tanks, planes and ships fight badly without fuel. Each unit of oil you import or produce is turned into fuel."
@@ -222,7 +245,7 @@ fuel_ratio < 0.25
 id = "economy_partial_mobilisation"
 category = "economy"
 target = "politics"
-priority = 10
+priority = 42
 title = "Mobilise Your Economy"
 advice = "Change the Economy law to Partial Mobilisation (if it is available to you)."
 why = "Civilian Economy uses a large share of your factories to make consumer goods. Partial Mobilisation frees many of them, and also builds and produces faster. It is one of the best early uses of political power."
@@ -249,7 +272,7 @@ OR = {
 id = "economy_war_economy"
 category = "economy"
 target = "politics"
-priority = 15
+priority = 30
 title = "Move to War Economy"
 advice = "You are at war: change the Economy law to War Economy."
 why = "War Economy cuts consumer goods even further and raises military output. It costs political power, but it is almost always worth it once the shooting starts."
@@ -290,7 +313,7 @@ surrender_progress > 0.15
 id = "small_army"
 category = "military"
 target = "deploy"
-priority = 10
+priority = 25
 title = "Train More Divisions"
 advice = "Tension is rising and your army is small. Queue more divisions."
 why = "Divisions take months to train. Training them before a war starts means they are ready when you need them. Infantry divisions are cheap and are enough to hold a front line."
@@ -302,6 +325,7 @@ steps = [
 ]
 trigger = '''
 has_army_size = { size < 24 }
+amount_manpower_in_deployment_queue < 1000
 OR = {
 	has_war = yes
 	threat > 0.25
@@ -312,7 +336,7 @@ OR = {
 id = "use_army_experience"
 category = "military"
 target = "deploy"
-priority = 30
+priority = 68
 title = "Improve Your Division Template"
 advice = "Spend Army Experience in the division designer."
 why = "Army experience can redesign division templates. Support companies (engineers, recon, artillery) make a division much stronger for little cost."
@@ -330,7 +354,7 @@ has_army_experience > 50
 id = "use_battle_plans"
 category = "military"
 target = "none"
-priority = 10
+priority = 70
 title = "Use Battle Plans"
 advice = "Put your divisions in armies and give them front lines and offensive arrows."
 why = "Battle plans let generals move dozens of divisions at once. Divisions that wait in a plan gain planning bonuses, so a prepared attack hits far harder than one ordered by hand."
@@ -349,7 +373,7 @@ has_war = yes
 id = "check_supply"
 category = "military"
 target = "logistics"
-priority = 10
+priority = 72
 title = "Keep Your Army Supplied"
 advice = "Check the Supply map mode. Divisions out of supply lose strength fast."
 why = "Divisions get supplies through supply hubs and railways. Out of supply, they lose organisation and attack poorly. This is the most common reason an offensive stalls."
@@ -367,7 +391,7 @@ has_war = yes
 id = "air_superiority"
 category = "military"
 target = "production"
-priority = 20
+priority = 60
 title = "Fight for the Skies"
 advice = "Build fighters and put them on Air Superiority over the front."
 why = "If the enemy controls the air, your divisions move slowly and take extra damage. Fighters on Air Superiority missions are the counter."
@@ -386,7 +410,7 @@ has_deployed_air_force_size = { size < 100 type = fighter }
 id = "protect_convoys"
 category = "military"
 target = "none"
-priority = 10
+priority = 18
 title = "Your Convoys Are Under Attack"
 advice = "Escort your convoys or change trade routes."
 why = "Convoys carry your imports and supply your troops overseas. When enemy submarines and ships sink them, both stop. Escorts and more convoys keep goods flowing."
@@ -404,7 +428,7 @@ convoy_threat > 0.3
 id = "conscription_peace"
 category = "military"
 target = "politics"
-priority = 20
+priority = 61
 title = "Raise Conscription"
 advice = "Manpower is low. Change the Conscription law to Limited Conscription."
 why = "Manpower is the pool of people you can draft into divisions. Volunteer Only gives you very little of it. Limited Conscription increases it a lot."
@@ -427,7 +451,7 @@ has_political_power > 100
 id = "conscription_war"
 category = "military"
 target = "politics"
-priority = 25
+priority = 28
 title = "Expand Conscription"
 advice = "You are at war and short of manpower. Change the law to Extensive Conscription."
 why = "A wartime army loses men quickly. Extensive Conscription lets you draft more people, at a small cost to factory output."
@@ -450,7 +474,7 @@ has_political_power > 100
 id = "pick_focus"
 category = "politics"
 target = "politics"
-priority = 5
+priority = 20
 title = "Choose a National Focus"
 advice = "Always keep a national focus running. Early on, pick ones that give factories or political power."
 why = "National focuses are your country's long-term plan. They give factories, research bonuses, political power and unique events. A day without a focus is a day lost."
@@ -468,7 +492,7 @@ date < 1936.2.1
 id = "spend_political_power"
 category = "politics"
 target = "politics"
-priority = 50
+priority = 62
 title = "Spend Your Political Power"
 advice = "You have saved a lot of Political Power. Hire an advisor or change a law."
 why = "Political power that sits unspent is wasted. Good uses: a political advisor or industry designer, economy and trade laws, or the decisions available to your country."
@@ -486,7 +510,7 @@ has_political_power > 300
 id = "low_stability"
 category = "politics"
 target = "politics"
-priority = 30
+priority = 64
 title = "Stability Is Low"
 advice = "Raise stability with national spirits, focuses or advisors."
 why = "Low stability slows factory output and can cause unrest. Look for focuses and political advisors that add stability, and avoid laws that lower it."
@@ -504,7 +528,7 @@ has_stability < 0.4
 id = "low_war_support"
 category = "politics"
 target = "politics"
-priority = 35
+priority = 66
 title = "War Support Is Low"
 advice = "Raise war support. It unlocks stronger economy and conscription laws."
 why = "War support decides which laws you can pick and how well your people endure losses. Low war support blocks mobilisation laws and makes your country easier to defeat."
@@ -526,7 +550,7 @@ OR = {
 id = "check_decisions"
 category = "politics"
 target = "politics"
-priority = 40
+priority = 36
 title = "Look at Your Decisions"
 advice = "Decisions can give factories, resources and political power. Check them regularly."
 why = "Many countries have decisions that give a big boost: new factories, resource rights, or stability. Some are only available for a limited time."
@@ -544,7 +568,7 @@ date < 1936.3.1
 id = "seek_faction"
 category = "politics"
 target = "diplomacy"
-priority = 10
+priority = 48
 title = "Look for Allies"
 advice = "The world is getting dangerous. Consider joining a faction."
 why = "A small country on its own is an easy target. When world tension is high, a faction that shares your ideology may accept you, and then its members will defend you."
@@ -568,7 +592,7 @@ id = "found_intelligence_agency"
 category = "dlc"
 dlc = "lar"
 target = "intelligence"
-priority = 10
+priority = 80
 title = "Found an Intelligence Agency"
 advice = "Create an Intelligence Agency to unlock spies, code cracking and intel."
 why = "The agency (La Résistance) lets you recruit operatives, build spy networks, steal blueprints, and see enemy divisions through better intel. It is cheap early and pays off for the whole game."
@@ -588,7 +612,7 @@ id = "use_intelligence_agency"
 category = "dlc"
 dlc = "lar"
 target = "intelligence"
-priority = 20
+priority = 84
 title = "Put Your Spies to Work"
 advice = "Build an intel network in your enemy and run operations."
 why = "An intel network reveals the enemy's divisions and lets you run operations such as stealing blueprints or infiltrating their army. Better intel also improves your planning against them."
@@ -608,7 +632,7 @@ id = "design_tanks"
 category = "dlc"
 dlc = "nsb"
 target = "production"
-priority = 40
+priority = 86
 title = "Design Your First Tank"
 advice = "Use the tank designer to build a cheap, reliable tank."
 why = "With No Step Back you design tanks from a chassis and modules. A cheap design with good reliability that you can build in numbers beats an expensive design you can't."
@@ -629,7 +653,7 @@ id = "officer_corps"
 category = "dlc"
 dlc = "nsb"
 target = "officer_corps"
-priority = 10
+priority = 82
 title = "Use Your Command Power"
 advice = "Pick army spirits and fill high command with your command power."
 why = "Command power builds up and is wasted at the cap. Army spirits (No Step Back) and high command members give permanent bonuses to your whole army."
@@ -648,7 +672,7 @@ id = "design_planes"
 category = "dlc"
 dlc = "bba"
 target = "production"
-priority = 50
+priority = 88
 title = "Design Better Aircraft"
 advice = "Spend air experience in the aircraft designer."
 why = "With By Blood Alone you design aircraft from an airframe and modules. A fighter with more guns and a better engine wins air battles, and air battles decide land battles."
@@ -667,7 +691,7 @@ id = "hire_mios"
 category = "dlc"
 dlc = "aat"
 target = "production"
-priority = 60
+priority = 85
 title = "Work With Military-Industrial Organisations"
 advice = "Assign MIOs to your production lines for free bonuses."
 why = "In Arms Against Tyranny, Military-Industrial Organisations (MIOs) improve the equipment they make. Assign one to each important production line. The MIO grows and unlocks more traits."
@@ -687,7 +711,7 @@ id = "special_projects"
 category = "dlc"
 dlc = "gtd"
 target = "research"
-priority = 30
+priority = 90
 title = "Start a Special Project"
 advice = "Major powers can run special projects: jet engines, rockets, and more."
 why = "Special projects (Götterdämmerung) are long programmes run by scientists in facilities. They unlock unique weapons and bonuses that normal research can't give."
@@ -706,7 +730,7 @@ date > 1936.6.1
 id = "gain_autonomy"
 category = "dlc"
 target = "diplomacy"
-priority = 20
+priority = 78
 title = "Gain Autonomy From Your Overlord"
 advice = "As a subject, contribute troops and factories to earn more autonomy."
 why = "Subjects (Together for Victory, now free) gain autonomy by helping their overlord: sending equipment, fighting in its wars, and building industry. With enough autonomy you become independent."
