@@ -1,7 +1,10 @@
 """Procedural icon art for the advisor, drawn with signed-distance shapes so no image editor is needed.
 
 Every shape is a function (x, y) -> signed distance in pixels (negative = inside).
+The painters below are cached: they are deterministic, and painting a large panel in pure Python takes about a second.
+Callers must treat the returned Canvas as read-only.
 """
+import functools
 import math
 
 
@@ -97,6 +100,7 @@ def _disc(c, size, edge, top, bottom):
     c.fill(circle(m, m, m - 0.5 - size * 0.075), vertical(top, bottom, 0, size))
 
 
+@functools.cache
 def advice_badge(size):
     """Gold disc with an exclamation mark: 'the advisor recommends something here'."""
     s, c = size / 24, Canvas(size, size)
@@ -106,6 +110,7 @@ def advice_badge(size):
     return c
 
 
+@functools.cache
 def ok_badge(size):
     s, c = size / 24, Canvas(size, size)
     _disc(c, size, rgba(14, 50, 20), rgba(120, 200, 110), rgba(40, 125, 55))
@@ -115,6 +120,7 @@ def ok_badge(size):
     return c
 
 
+@functools.cache
 def snoozed_badge(size):
     s, c = size / 24, Canvas(size, size)
     _disc(c, size, rgba(30, 30, 36), rgba(150, 155, 170), rgba(90, 95, 110))
@@ -125,6 +131,7 @@ def snoozed_badge(size):
     return c
 
 
+@functools.cache
 def advisor_button(size):
     """Topbar button that opens the advisor panel: a lightbulb on a navy tile."""
     s, c = size / 40, Canvas(size, size)
@@ -139,6 +146,7 @@ def advisor_button(size):
     return c
 
 
+@functools.cache
 def close_button(size):
     s, c = size / 24, Canvas(size, size)
     c.fill(round_rect(1, 1, size - 1, size - 1, 4 * s), rgba(60, 20, 18))
@@ -150,6 +158,7 @@ def close_button(size):
     return c
 
 
+@functools.cache
 def text_button(width, height):
     c = Canvas(width, height)
     c.fill(round_rect(0.5, 0.5, width - 0.5, height - 0.5, 4), rgba(120, 90, 30))
@@ -157,6 +166,7 @@ def text_button(width, height):
     return c
 
 
+@functools.cache
 def panel_background(width, height, header_height, boxes=()):
     """Window frame with a gold border and a header band. `boxes` = inset areas as (x0, y0, x1, y1)."""
     c = Canvas(width, height)
@@ -172,6 +182,7 @@ def panel_background(width, height, header_height, boxes=()):
     return c
 
 
+@functools.cache
 def card(width, height):
     """Clickable advice card; the game's button shader brightens it on hover."""
     c = Canvas(width, height)
@@ -180,10 +191,47 @@ def card(width, height):
     return c
 
 
+@functools.cache
 def tab_highlight(width, height):
     """Gold outline and underline drawn over the selected tab."""
     c = Canvas(width, height)
     outer, inner = round_rect(0, 0, width, height, 4), round_rect(1.5, 1.5, width - 1.5, height - 1.5, 3)
     c.fill(lambda x, y: max(outer(x, y), -inner(x, y)), rgba(255, 205, 80))
     c.fill(round_rect(6, height - 4, width - 6, height - 1.5, 1), rgba(255, 205, 80))
+    return c
+
+
+@functools.cache
+def banner(width, height):
+    """'Do this next' bar: navy with a gold edge and a gold marker on the left."""
+    c = Canvas(width, height)
+    c.fill(round_rect(0, 0, width, height, 6), vertical(GOLD_TOP, GOLD_BOTTOM, 0, height))
+    c.fill(round_rect(1.5, 1.5, width - 1.5, height - 1.5, 5),
+           vertical(rgba(58, 70, 100, 245), rgba(26, 32, 48, 245), 0, height))
+    c.fill(round_rect(5, 6, 9, height - 6, 2), vertical(GOLD_TOP, GOLD_BOTTOM, 6, height - 6))
+    return c
+
+
+@functools.cache
+def pulse_strip(size, frames):
+    """Frames, left to right, of a gold ring that swells and fades. Drawn over a badge to make it pulse."""
+    c = Canvas(size * frames, size)
+    m = size / 2
+    for f in range(frames):
+        t = f / frames
+        strength = 0.5 - 0.5 * math.cos(2 * math.pi * t)  # 0 → 1 → 0 over the loop
+        r, w = m - 1.2 - (1 - strength) * 1.5, 1.0 + strength * 1.2
+        ring = circle(f * size + m, m, r)
+        c.fill(lambda x, y, ring=ring, w=w: abs(ring(x, y)) - w, rgba(255, 245, 190, round(70 + 185 * strength)),
+               (f * size, 0, (f + 1) * size, size))
+    return c
+
+
+@functools.cache
+def glow_frame(width, height, inset=6):
+    """Soft gold frame drawn around a vanilla button; the GUI fades it in and out to make the button pulse."""
+    c = Canvas(width, height)
+    frame = round_rect(inset, inset, width - inset, height - inset, 6)
+    for spread, alpha in ((inset, 40), (inset * 0.6, 80), (2.2, 150), (1.1, 255)):
+        c.fill(lambda x, y, s=spread: abs(frame(x, y)) - s, rgba(255, 214, 90, alpha))
     return c

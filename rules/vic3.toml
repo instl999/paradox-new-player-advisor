@@ -1,0 +1,513 @@
+# New Player Advisor — Victoria 3 rules (patch 1.15).
+#
+# Same format as rules/hoi4.toml. Each [[rule]] is one piece of advice; when its `trigger` is true for the player's
+# country, a gold badge appears on the `target` sidebar button, the rule is active in the Advisor panel, and the
+# step-by-step guide explains what to do and why. `trigger` is Victoria 3 trigger script in country scope, linted
+# against rules/known/vic3_triggers.txt.
+#
+# `priority` is one global order (lower = more important), in the bands of docs/DESIGN.md §4.2:
+#   1–19 emergency · 20–39 idle capacity · 40–59 core economy · 60–79 strengthening · 80–99 refinement / DLC.
+# The active rule with the lowest priority is "Do this next" (also shown in the game's Important Actions list).
+#
+# Optional per rule: `panel` / `tab` override which screen the guide's "Open screen" button (and the alert) opens.
+# Always-on reminders (such as "pass a law") go late in their band so they never hide a concrete problem.
+# Rule text may not contain [ ] $ # or double quotes (they mean something in Victoria 3 localization).
+#
+# Translations live in rules/locale/vic3/<language>.toml. Run `python tools/build.py vic3` after editing.
+
+[mod]
+name = "New Player Advisor"
+id = "com.github.instl999.new-player-advisor"
+description = "An in-game advisor for new players: always shows the best next move, highlights where to click, and explains why."
+folder = "new_player_advisor"
+version = "0.1.0"
+supported_version = "1.15.*"
+prefix = "npa"
+snooze_days = 30
+alerts = true          # also list "Do this next" in the game's Important Actions
+
+# The advisor button (40x40) and the "Do this next" bar, in UI pixels from the top-left of the screen.
+# They sit just above the left sidebar, which starts at y = 200.
+[toggle]
+x = 5
+y = 152
+
+[next]
+x = 52
+y = 156
+
+# The guide window: offset from the top-right corner of the screen. Vanilla screens open on the left and the
+# outliner (360 px wide) sits on the right, so the guide goes just left of the outliner.
+[guide]
+x = -375
+y = 110
+
+[categories]
+economy = "Economy"
+government = "Government"
+society = "Society"
+military = "Military & Diplomacy"
+
+# DLC: key = has_dlc_feature name. No rule uses one yet.
+[dlc]
+
+# Sidebar buttons (gui/information_panel_bar.gui): the bar starts at y = 200, its buttons are 5 px further down,
+# at these offsets: politics 0, budget 50, buildings 100, market 150, military 200, diplomacy 270,
+# technology 310, culture 350, population 390. Sizes come from its templates sidebar_button_size (48x50) and
+# sidebar_button_size_small (42x40). x/y/w/h is the button's box. Check with "Show all icons" and adjust.
+# `panel` / `tab` (or a full `open` command) say which screen the guide's "Open screen" button opens; they are the
+# names vanilla's sidebar uses. `alert_panel` overrides the panel|tab the native alert opens, when it differs.
+[targets.politics]
+label = "Politics"
+x = 0
+y = 205
+w = 48
+h = 50
+panel = "politics"
+tab = "default"
+
+[targets.budget]
+label = "Budget"
+x = 0
+y = 255
+w = 48
+h = 50
+panel = "budget"
+tab = "default"
+
+[targets.buildings]
+label = "Buildings"
+x = 0
+y = 305
+w = 48
+h = 50
+panel = "production_methods"
+tab = "construction_queues"
+alert_panel = "construction|default"   # what vanilla's construction alerts open
+
+[targets.market]
+label = "Market"
+x = 0
+y = 355
+w = 48
+h = 50
+open = "[InformationPanelBar.OpenMarketPanelTab(AccessPlayer.AccessFirstMarket, 'default')]"
+
+[targets.military]
+label = "Military"
+x = 0
+y = 405
+w = 48
+h = 50
+panel = "military"
+tab = "army"
+
+[targets.diplomacy]
+label = "Diplomacy"
+x = 0
+y = 475
+w = 42
+h = 40
+panel = "diplomatic_overview"
+tab = "default"
+
+[targets.technology]
+label = "Technology"
+x = 0
+y = 515
+w = 42
+h = 40
+panel = "tech_tree"
+tab = "production"
+
+# ============================================================================ Economy
+
+[[rule]]
+id = "in_default"
+category = "economy"
+target = "budget"
+priority = 5
+title = "You Have Defaulted"
+advice = "Your country could not pay its debts. Get the weekly balance positive as fast as possible."
+why = "A country in default suffers heavy penalties and cannot borrow any more. Every week of deficit makes it worse. Raising taxes and cutting spending is the only way out."
+steps = [
+  "Click the Budget button in the left sidebar (the one with the gold badge).",
+  "Raise the Tax Level one step, and add consumption taxes on goods that the rich buy, such as wine or luxury clothes.",
+  "Lower Government Wages and Military Wages one step each. Pause construction you do not need right now.",
+  "Watch the weekly balance at the top of the Budget panel. It must turn green.",
+]
+trigger = '''
+in_default = yes
+'''
+
+[[rule]]
+id = "budget_deficit"
+category = "economy"
+target = "budget"
+priority = 10
+title = "You Are Losing Money"
+advice = "Your weekly balance is negative. Raise taxes or cut spending before you run out of gold."
+why = "When your gold reserves run out, you start borrowing. Debt costs interest, and if it reaches the credit limit you default. A small weekly surplus keeps the economy safe and lets you keep building."
+steps = [
+  "Click the Budget button in the left sidebar (the one with the gold badge).",
+  "Look at the weekly balance. Hover over income and expenses to see where the money goes.",
+  "Raise the Tax Level one step if your people can bear it, or add a consumption tax on a popular good.",
+  "Construction costs money: if the deficit is large, lower the construction spending or pause some projects.",
+  "Check the balance again next week. A small green surplus is the goal.",
+]
+trigger = '''
+net_total_income < 0
+NOT = { gold_reserves > gold_reserves_limit }
+'''
+
+[[rule]]
+id = "high_debt"
+category = "economy"
+target = "budget"
+priority = 15
+title = "Your Debt Is Growing Dangerous"
+advice = "You have used more than half of your credit limit. Pay the debt down with a surplus."
+why = "Interest on debt eats your income every week. If debt reaches the credit limit, you default, which is a disaster for a young economy. Paying it off early frees money for building."
+steps = [
+  "Click the Budget button in the left sidebar.",
+  "Hover over Debt to see your credit limit and interest.",
+  "Turn the weekly balance positive: raise taxes, add consumption taxes, or slow down construction.",
+  "Keep the surplus until the debt is gone, then spend it on construction again.",
+]
+trigger = '''
+scaled_debt > 0.5
+'''
+
+[[rule]]
+id = "goods_shortage"
+category = "economy"
+target = "market"
+priority = 52
+title = "Your Market Is Short of Goods"
+advice = "Several goods your buildings need are in shortage. Build more of them or import them."
+why = "When a good is in shortage, every building that uses it produces less and costs more to run. Shortages of tools, wood, iron or coal also make construction slow and expensive."
+steps = [
+  "Click the Market button in the left sidebar (the one with the gold badge).",
+  "Find the goods marked in red. They are in shortage.",
+  "Build more of the building that makes that good, for example a Tooling Workshop for tools or a Logging Camp for wood.",
+  "If you cannot produce it, import it: open the trade routes tab and start an import route for that good.",
+  "Check the market again in a few months. The red marks should be gone.",
+]
+trigger = '''
+# A shortage of one input somewhere is normal; three or more slows the whole economy.
+market = { market_number_goods_shortages >= 3 }
+'''
+
+[[rule]]
+id = "no_research"
+category = "economy"
+target = "technology"
+priority = 20
+title = "Pick a Technology to Research"
+advice = "You are not researching anything. Choose a technology."
+why = "Innovation keeps coming every week, and without a chosen technology most of it is wasted. New technologies unlock better buildings, production methods and laws."
+steps = [
+  "Click the Technology button in the left sidebar (the one with the gold badge).",
+  "Pick a technology in the Production tree. Good early choices lead to Railways, better tools and Stock Exchange.",
+  "Queue a few more so research never stops.",
+]
+trigger = '''
+NOT = { is_researching_technology = any }
+has_researchable_technology = yes
+'''
+
+[[rule]]
+id = "idle_construction"
+category = "economy"
+target = "buildings"
+priority = 22
+title = "Your Construction Is Idle"
+advice = "Queue more buildings. Construction points you do not use are lost every week."
+why = "Construction is how your country grows. Every week your construction sectors produce points, and if the queue is empty those points are wasted. A long queue keeps them busy."
+steps = [
+  "Click the Buildings button in the left sidebar (the one with the gold badge).",
+  "Open the construction tab and choose a building to build.",
+  "Good early choices: buildings for goods in shortage, more Construction Sectors, and Government Administration if bureaucracy is low.",
+  "Pick states with many unemployed or peasant workers and good infrastructure.",
+  "Queue several buildings at once so the queue never runs empty.",
+]
+trigger = '''
+has_wasted_construction = yes
+'''
+
+[[rule]]
+id = "hoarding_gold"
+category = "economy"
+target = "budget"
+priority = 38
+title = "Your Treasury Is Full"
+advice = "Your gold reserves are at their limit. Spend the surplus on construction."
+why = "Gold above the reserve limit does nothing for you. Spending it on more construction grows your economy, and it is better than collecting taxes you do not need."
+steps = [
+  "Click the Budget button in the left sidebar.",
+  "Raise construction spending, or build more Construction Sectors so you can build faster.",
+  "If you still have too much money, lower the Tax Level one step. Your people will be happier.",
+]
+trigger = '''
+gold_reserves > gold_reserves_limit
+'''
+
+[[rule]]
+id = "grow_construction"
+category = "economy"
+target = "buildings"
+priority = 40
+title = "Build More Construction Sectors"
+advice = "Your construction cannot keep up. Build Construction Sectors to build faster."
+why = "Construction Sectors produce the construction points that build everything else. If the queue would take more than a year, or private investment cannot be spent, more sectors grow your whole economy faster."
+steps = [
+  "Click the Buildings button in the left sidebar (the one with the gold badge).",
+  "Choose Construction Sector and queue it in one or two states with good infrastructure.",
+  "Make sure you can afford it: construction sectors cost money every week. Check the weekly balance in the Budget.",
+  "Keep wood, iron and tools cheap, because construction uses them.",
+]
+trigger = '''
+OR = {
+	# Same test as vanilla's insufficient_construction_for_investment alert.
+	AND = {
+		has_sufficient_construction_capacity_for_investment = no
+		investment_pool_net_income >= 40000
+	}
+	# Your own (government) queue would take more than a year.
+	construction_queue_government_duration > 52
+}
+net_total_income > 0
+'''
+
+[[rule]]
+id = "infrastructure"
+category = "economy"
+target = "buildings"
+priority = 48
+title = "Fix Infrastructure Shortfalls"
+advice = "A state uses more infrastructure than it has. Build Railways or use the road decree."
+why = "When a state lacks infrastructure, its market access falls, its buildings sell less, and goods get more expensive there. Railways and decrees raise infrastructure."
+steps = [
+  "Switch the map to the infrastructure map mode (map mode buttons at the bottom) and find states shown in red.",
+  "Click such a state. In its state panel, issue the Road Maintenance decree if you have the authority.",
+  "Once you have researched Railways, build a Railway there from the Buildings screen.",
+  "Avoid building more factories in that state until the shortfall is fixed.",
+]
+trigger = '''
+any_scope_state = {
+	is_incorporated = yes
+	npa_infrastructure_balance < 0
+}
+'''
+
+# ============================================================================ Government
+
+[[rule]]
+id = "bureaucracy_deficit"
+category = "government"
+target = "buildings"
+priority = 25
+title = "You Lack Bureaucracy"
+advice = "Bureaucracy is negative. Build Government Administrations."
+why = "Negative bureaucracy makes your tax collection waste money and blocks institutions. Government Administration buildings produce bureaucracy, and some laws use less of it."
+steps = [
+  "Click the Buildings button in the left sidebar (the one with the gold badge).",
+  "Choose Government Administration and build it in a state with many people, such as your capital.",
+  "Each level costs money, so check your budget. It is still worth it while bureaucracy is negative.",
+  "Watch Bureaucracy in the top bar. Stop building them once it is positive again.",
+]
+trigger = '''
+bureaucracy < 0
+'''
+
+[[rule]]
+id = "authority_deficit"
+category = "government"
+target = "politics"
+priority = 28
+title = "You Lack Authority"
+advice = "Authority is negative. Cancel a decree or change laws to gain authority."
+why = "Authority pays for decrees and other government actions. When it is negative, everything that costs authority gets worse. Decrees use most of it."
+steps = [
+  "Hover over Authority in the top bar to see what uses it.",
+  "Cancel a decree that is no longer needed: click the state and remove the decree.",
+  "Later, laws such as a stronger central government give more authority. Look for them in the Politics screen.",
+]
+trigger = '''
+authority < 0
+'''
+
+[[rule]]
+id = "influence_deficit"
+category = "government"
+target = "diplomacy"
+priority = 30
+title = "You Lack Influence"
+advice = "Influence is negative. End a diplomatic pact or a rivalry."
+why = "Every pact, rivalry and obligation costs influence. When you use more than you have, your diplomacy suffers. Drop what you do not need."
+steps = [
+  "Click the Diplomacy button in the left sidebar (the one with the gold badge).",
+  "Hover over Influence in the top bar to see what uses it.",
+  "End a pact or rivalry you do not need: click that country and cancel it.",
+]
+trigger = '''
+influence < 0
+'''
+
+[[rule]]
+id = "low_legitimacy"
+category = "government"
+target = "politics"
+priority = 45
+title = "Your Government Lacks Legitimacy"
+advice = "Legitimacy is very low. Bring a popular interest group into the government."
+why = "With low legitimacy, laws are much harder to pass and your government is unstable. Legitimacy comes from having powerful, popular interest groups in government."
+steps = [
+  "Click the Politics button in the left sidebar (the one with the gold badge).",
+  "Look at the interest groups. The bigger the circle, the more clout they have.",
+  "Use Reform Government to add a strong interest group that is not in government yet.",
+  "Check Legitimacy at the top of the Politics screen. Above 50 is comfortable.",
+]
+trigger = '''
+government_legitimacy < 25
+'''
+
+[[rule]]
+id = "enact_law"
+category = "government"
+target = "politics"
+tab = "laws"
+priority = 74
+title = "Pass a New Law"
+advice = "You are not changing any law. Start enacting one that your government supports."
+why = "Laws shape everything: taxes, trade, rights and your economy. Passing one at a time, when the interest groups in government support it, steadily modernises your country."
+steps = [
+  "Click the Politics button in the left sidebar (the one with the gold badge), then open the Laws tab.",
+  "Hover over a law to see which interest groups support or oppose it, and how likely it is to pass.",
+  "Good early goals: laws that end Traditionalism, Serfdom or Isolationism, and laws that allow more industry.",
+  "Pick a law your government's interest groups support, and click Enact.",
+  "While it is being enacted, keep legitimacy up and do not upset the supporters.",
+]
+trigger = '''
+enacting_any_law = no
+government_legitimacy > 30
+is_at_war = no
+'''
+
+[[rule]]
+id = "high_turmoil"
+category = "government"
+target = "politics"
+priority = 60
+title = "Your People Are Angry"
+advice = "Many of your people are radicals. Raise their standard of living."
+why = "Radicals come from falling living standards and laws they hate. Too many of them lead to unrest and revolution. Cheaper goods and better wages bring them back."
+steps = [
+  "Click the Politics button in the left sidebar and hover over the interest groups to see where radicals come from.",
+  "Fix shortages of everyday goods such as grain, clothes and furniture. High prices hurt everyone.",
+  "Lower taxes or consumption taxes if they are high.",
+  "Avoid laws that the angry interest groups strongly oppose.",
+]
+trigger = '''
+country_turmoil > 0.2
+'''
+
+# ============================================================================ Society
+
+[[rule]]
+id = "low_literacy"
+category = "society"
+target = "politics"
+tab = "institutions"
+priority = 66
+title = "Educate Your People"
+advice = "Literacy is low. Invest in schools."
+why = "Literate people can take skilled jobs such as clerks and engineers, and literacy speeds up research. Schools take decades to pay off, so start early."
+steps = [
+  "Click the Politics button in the left sidebar and open the Institutions tab.",
+  "If you have a schools law, raise the Schools institution level. It costs bureaucracy.",
+  "If you have no schools law, look in the Laws tab for Religious Schools or Public Schools.",
+  "Make sure your bureaucracy stays positive while you do this.",
+]
+trigger = '''
+literacy_rate < 0.25
+game_date > 1837.1.1
+'''
+
+[[rule]]
+id = "unemployment"
+category = "society"
+target = "buildings"
+priority = 58
+title = "Put the Unemployed to Work"
+advice = "A state has many unemployed people. Build industry there."
+why = "Unemployed people produce nothing and earn almost nothing, so they become poor and angry. New buildings in that state give them jobs and grow your economy."
+steps = [
+  "Switch the map to the population or employment map mode to find states with high unemployment.",
+  "Click the Buildings button in the left sidebar.",
+  "Build something in that state that the market needs, such as a building for a good in shortage.",
+  "Check the state again once construction finishes.",
+]
+trigger = '''
+any_scope_state = {
+	is_incorporated = yes
+	state_unemployment_rate > 0.15
+}
+'''
+
+[[rule]]
+id = "found_company"
+category = "society"
+target = "buildings"
+panel = "companies"
+tab = "default"
+priority = 70
+title = "Establish a Company"
+advice = "You can establish a new company. Pick one that matches your strongest industry."
+why = "Companies give bonuses to the buildings they own and invest in your country. A company matching an industry you already have pays off right away."
+steps = [
+  "Open the Companies screen (the guide's Open screen button takes you there).",
+  "Look at the available companies and their bonuses.",
+  "Choose one that fits buildings you already have many of, and establish it.",
+]
+trigger = '''
+can_establish_company = yes
+'''
+
+# ============================================================================ Military & Diplomacy
+
+[[rule]]
+id = "diplomatic_play_target"
+category = "military"
+target = "diplomacy"
+priority = 8
+title = "You Are Being Threatened"
+advice = "Another country has started a diplomatic play against you. Find allies or prepare to back down."
+why = "A diplomatic play can turn into a war. You can win support from other countries, give in to their demand, or prepare your army. Losing a war usually costs more than backing down."
+steps = [
+  "Click the Diplomacy button in the left sidebar (the one with the gold badge) and open the diplomatic play.",
+  "Compare both sides' strength. Hover over the play to see who supports whom.",
+  "Ask other countries for support by offering them something, if you can win.",
+  "If you are much weaker, back down. You lose the demand, but you keep your army and your economy.",
+]
+trigger = '''
+is_diplomatic_play_target = yes
+'''
+
+[[rule]]
+id = "at_war"
+category = "military"
+target = "military"
+priority = 35
+title = "Fight Your War"
+advice = "You are at war. Mobilise your armies and send them to the front."
+why = "Armies must be mobilised before they can fight, and they need generals on a front. Mobilised armies consume ammunition and small arms, so keep those goods supplied."
+steps = [
+  "Click the Military button in the left sidebar (the one with the gold badge).",
+  "Mobilise your armies. Mobilisation takes some time.",
+  "Send each army to a front by giving its general an order, such as Advance or Defend.",
+  "Watch the market for small arms and ammunition. Shortages weaken your army a lot.",
+]
+trigger = '''
+is_at_war = yes
+'''

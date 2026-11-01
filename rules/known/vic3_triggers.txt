@@ -1,0 +1,66 @@
+# Victoria 3 triggers the rules may use. tools/lint.py rejects any other trigger name in rules/vic3.toml.
+# Every entry was checked in the game's own script documentation for patch 1.15.0 (triggers.log /
+# event_targets.log), as published in https://github.com/Victoria-3-Modding-Co-op/Modding-Digests (1.15.0/docs).
+# `@scope` marks a scope change whose block holds more triggers. Scripted values defined by the mod
+# (npa_infrastructure_balance) are allowed by the backend itself.
+
+# ---- country: money
+in_default                                         # yes/no
+net_total_income                                   # weekly balance after all expenses, compare
+net_fixed_income                                   # compare
+gold_reserves                                      # compare; `gold_reserves > gold_reserves_limit` is valid
+gold_reserves_limit                                # compare
+scaled_debt                                        # debt relative to debt ceiling (0–1), compare
+scaled_gold_reserves                               # compare
+has_healthy_economy                                # yes/no
+tax_level                                          # compare
+investment_pool                                    # compare
+
+# ---- country: construction and research
+has_wasted_construction                            # yes/no
+has_sufficient_construction_capacity_for_investment  # yes/no
+construction_queue_duration                        # rough weeks to finish the longest queue, compare
+construction_queue_num_queued_levels               # compare
+is_researching_technology                          # = <tech> / any
+has_researchable_technology                        # yes/no
+has_technology_researched                          # = <tech>
+can_establish_company                              # yes/no
+
+# ---- country: capacities and politics
+bureaucracy                                        # available, compare
+authority                                          # available, compare
+influence                                          # available, compare
+approaching_bureaucracy_shortage                   # yes/no
+government_legitimacy                              # 0–100, compare
+enacting_any_law                                   # yes/no
+has_law                                            # = law_type:<key>
+country_turmoil                                    # population-weighted turmoil, compare
+radical_fraction                                   # { value > x strata = ... }
+literacy_rate                                      # country/state/pop, compare
+
+# ---- country: war and diplomacy
+is_at_war                                          # yes/no
+is_diplomatic_play_target                          # yes/no
+
+# ---- misc
+is_player                                          # yes/no
+game_date                                          # compare to a date
+has_variable                                       # = name
+has_dlc_feature                                    # = <feature>
+
+# ---- market and state scope
+market_has_goods_shortage                          # market scope, yes/no
+market_number_goods_shortages                      # market scope, compare
+is_incorporated                                    # state scope, yes/no
+state_unemployment_rate                            # state scope, compare
+infrastructure                                     # state scope, compare
+infrastructure_usage                               # state scope, compare
+market_access                                      # state scope, compare
+
+# ---- scopes
+market @scope                                      # event_targets.log: country → market
+any_scope_state @scope                             # country → its states
+any_interest_group @scope
+any_military_formation @scope
+investment_pool_net_income                         # country, compare (vanilla alert: >= 40000)
+construction_queue_government_duration             # rough weeks for the government queue, compare

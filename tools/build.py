@@ -1,6 +1,6 @@
 """Build the advisor mod for a game from its rules file.
 
-    python tools/build.py hoi4             # build into build/hoi4/
+    python tools/build.py hoi4             # build into build/hoi4/ (or: vic3 → build/vic3/)
     python tools/build.py hoi4 --install   # build, then copy into the game's mod folder
     python tools/build.py hoi4 --package   # build, then make dist/<mod>.zip with a double-click installer
 """
@@ -11,12 +11,27 @@ import tomllib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import common  # noqa: E402
 import hoi4_backend  # noqa: E402
 import install  # noqa: E402
 import package  # noqa: E402
+import vic3_backend  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BACKENDS = {"hoi4": hoi4_backend}
+BACKENDS = {"hoi4": hoi4_backend, "vic3": vic3_backend}
+
+
+def load_config(game):
+    """rules/<game>.toml, with every rules/locale/<game>/<language>.toml under config["locale"][language]."""
+    with open(os.path.join(ROOT, "rules", f"{game}.toml"), "rb") as f:
+        config = tomllib.load(f)
+    locale_dir = os.path.join(ROOT, "rules", "locale", game)
+    config["locale"] = {}
+    for name in sorted(os.listdir(locale_dir)):
+        if name.endswith(".toml"):
+            with open(os.path.join(locale_dir, name), "rb") as f:
+                config["locale"][name[:-5]] = tomllib.load(f)
+    return config
 
 
 def main():
@@ -27,24 +42,17 @@ def main():
     parser.add_argument("--game-dir", help="game user folder, if not in the default Documents location")
     args = parser.parse_args()
 
-    with open(os.path.join(ROOT, "rules", f"{args.game}.toml"), "rb") as f:
-        config = tomllib.load(f)
-    locale_dir = os.path.join(ROOT, "rules", "locale", args.game)
-    config["locale"] = {}
-    for name in sorted(os.listdir(locale_dir)):
-        if name.endswith(".toml"):
-            with open(os.path.join(locale_dir, name), "rb") as f:
-                config["locale"][name[:-5]] = tomllib.load(f)
-
+    config = load_config(args.game)
+    backend = BACKENDS[args.game]
     out_root = os.path.join(ROOT, "build", args.game)
     try:
-        mod_dir = BACKENDS[args.game].build(config, out_root)
-    except hoi4_backend.RulesError as e:
+        mod_dir = backend.build(config, out_root)
+    except common.RulesError as e:
         sys.exit(f"rules/{args.game}.toml: {e}")
     print(f"Built {len(config['rule'])} rules -> {os.path.relpath(mod_dir, ROOT)}")
 
     if args.package:
-        zip_path = package.package(args.game, out_root, config["mod"], config.get("dlc", {}).values())
+        zip_path = package.package(args.game, backend, out_root, config["mod"], config.get("dlc", {}).values())
         print(f"Packaged -> {os.path.relpath(zip_path, ROOT)}")
 
     if args.install:

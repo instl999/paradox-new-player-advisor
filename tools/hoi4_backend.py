@@ -7,20 +7,56 @@ Runtime state lives on the player's country:
   var  npa_tab               selected panel tab (0-based, in [categories] order)
   var  npa_guide             1-based index of the rule whose guide is open (0 = closed)
   var  npa_step              current guide step (1-based)
+  flag npa_hide_next         the player turned the "Do this next" strip off
+
+"Do this next" is the single active rule with the lowest priority (ties: earlier in the file). A gold ring pulses
+over the badge spot of its topbar button, and over that of the rule whose guide is open.
 """
 import math
 import os
-import re
 import shutil
 
 import art
+import lint
+from common import RulesError, check_braces, check_identifier, header_comment, indent, rank_rules, rule_text
+from common import validate_locales, validate_rules
 from dds import write_dds
+
+GAME_FOLDER = "Hearts of Iron IV"  # under Documents/Paradox Interactive and steamapps/common
+
+PACKAGE_README = """{name} {version} - Hearts of Iron IV
+
+INSTALL
+  1. Unzip this folder anywhere (do not run it from inside the zip).
+  2. Double-click Install.bat.
+  3. In the Paradox launcher, add "{name}" to a playset and start the game.
+
+UNINSTALL
+  Double-click Uninstall.bat.
+
+USING IT
+  A gold "!" badge on a topbar button means the advisor has a recommendation there.
+  Hover over it to read why. Left-click opens a step-by-step guide. Right-click snoozes it for {days} days.
+  The lightbulb button opens the panel with all advice, sorted into tabs (Economy, Military,
+  Politics & Diplomacy, DLC Features). Click any card in it for its guide.
+
+  The installer saves a DLC report to mod\\new_player_advisor\\dlc_check.txt. Advice for DLC you
+  don't own stays hidden.
+
+  If the badges don't line up with the buttons, open the Advisor and click "Show all icons" to see every
+  badge at once. Then report the offsets (a screenshot helps).
+
+NOTE
+  Like any mod, this turns off Ironman achievements while it is enabled.
+  If something doesn't work, send:  Documents\\Paradox Interactive\\Hearts of Iron IV\\logs\\error.log
+"""
 
 # Panel layout (pixels)
 CARD_W, CARD_H, GAP, HEADER_H, FOOTER_H = 420, 76, 10, 52, 44
 TAB_H, TAB_GAP, COLUMNS, MAX_PER_CATEGORY = 30, 6, 2, 10
 TOPBAR_BADGE, PANEL_BADGE, TOGGLE_SIZE, ALERT_SIZE = 20, 26, 40, 16
 FOOTER_BUTTON_W, FOOTER_BUTTON_H = 170, 28
+BANNER_H, NEXT_W, NEXT_H, PULSE_FRAMES = 36, 320, 32, 8
 # Guide window layout
 GUIDE_W, GUIDE_H, GUIDE_HEADER = 480, 480, 56
 STEP_BOX = (12, 64, GUIDE_W - 12, 224)
@@ -29,17 +65,13 @@ GUIDE_BUTTON_W, GUIDE_BUTTON_H = 130, 30
 MAX_STEPS = 6
 
 
-class RulesError(Exception):
-    pass
-
-
 def build(config, out_root):
     mod, rules, targets = config["mod"], config["rule"], config["targets"]
     categories, dlcs = config["categories"], config.get("dlc", {})
     _validate(mod, rules, targets, categories, dlcs)
     p = mod["prefix"]
-    for i, rule in enumerate(rules, 1):
-        rule["index"] = i
+    # Badges per button and "Do this next" both follow the global rank (priority, then file order).
+    _, by_target = rank_rules(rules)
 
     mod_dir = os.path.join(out_root, mod["folder"])
     if os.path.isdir(mod_dir):
@@ -48,18 +80,13 @@ def build(config, out_root):
                 *(f"localisation/{lang}" for lang in LANGUAGES)):
         os.makedirs(os.path.join(mod_dir, sub), exist_ok=True)
 
-    # Order rules within each target by priority; badge for a rule shows only if no earlier one is active.
-    by_target = {}
-    for rule in sorted(rules, key=lambda r: r["priority"]):
-        if rule["target"] != "none":
-            by_target.setdefault(rule["target"], []).append(rule)
     by_category = {cat: [r for r in rules if r["category"] == cat] for cat in categories}
 
     layout = _panel_layout(by_category)
     files = {
         "descriptor.mod": _descriptor(mod, with_path=None),
         f"common/scripted_triggers/{p}_advisor_triggers.txt": _scripted_triggers(p, rules, by_target, dlcs),
-        f"common/scripted_guis/{p}_advisor_scripted_guis.txt": _scripted_guis(mod, rules, by_target, categories),
+        f"common/scripted_guis/{p}_advisor_scripted_guis.txt": _scripted_guis(mod, rules, targets, by_target, categories),
         f"interface/{p}_advisor.gui": _gui(config, by_target, by_category, layout),
         f"interface/{p}_advisor.gfx": _gfx(p),
         **_localisations(mod, rules, targets, categories, config["locale"]),
@@ -70,7 +97,7 @@ def build(config, out_root):
         with open(os.path.join(mod_dir, rel), "w", encoding=encoding, newline="\n") as f:
             f.write(text)
         if rel.endswith((".txt", ".gui", ".gfx")):
-            _check_braces(rel, text)
+            check_braces(rel, text)
 
     _textures(os.path.join(mod_dir, "gfx", "interface", p), layout)
 
@@ -83,62 +110,19 @@ def build(config, out_root):
 # --------------------------------------------------------------------------- validation
 
 def _validate(mod, rules, targets, categories, dlcs):
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", mod["prefix"]):
-        raise RulesError("mod.prefix must be lowercase letters, digits and underscores")
-    seen = set()
-    for rule in rules:
-        rid = rule.get("id", "?")
-        for key in ("id", "category", "target", "priority", "title", "advice", "why", "steps", "trigger"):
-            if key not in rule:
-                raise RulesError(f"rule '{rid}' is missing '{key}'")
-        if not re.fullmatch(r"[a-z][a-z0-9_]*", rid):
-            raise RulesError(f"rule id '{rid}' must be lowercase letters, digits and underscores")
-        if rid in seen:
-            raise RulesError(f"duplicate rule id '{rid}'")
-        seen.add(rid)
-        if rule["target"] != "none" and rule["target"] not in targets:
-            raise RulesError(f"rule '{rid}' targets unknown button '{rule['target']}'")
-        if rule["category"] not in categories:
-            raise RulesError(f"rule '{rid}' has unknown category '{rule['category']}'")
-        if "dlc" in rule and rule["dlc"] not in dlcs:
-            raise RulesError(f"rule '{rid}' names unknown dlc '{rule['dlc']}' (add it to [dlc])")
-        if not 1 <= len(rule["steps"]) <= MAX_STEPS:
-            raise RulesError(f"rule '{rid}' must have 1–{MAX_STEPS} steps")
-        for key in ("title", "advice", "why"):
-            _check_text(f"rule '{rid}' {key}", rule[key])
-        for step in rule["steps"]:
-            _check_text(f"rule '{rid}' step", step)
-        _check_braces(f"rule '{rid}' trigger", rule["trigger"])
-    for cat in categories:
-        count = sum(r["category"] == cat for r in rules)
-        if count > MAX_PER_CATEGORY:
-            raise RulesError(f"category '{cat}' has {count} rules; the panel fits {MAX_PER_CATEGORY} per tab")
-
-
-def _check_text(where, text):
-    if '"' in text:
-        raise RulesError(f"{where} may not contain double quotes")
-
-
-def _check_braces(where, text):
-    depth = 0
-    for line in text.splitlines():
-        for ch in line.split("#", 1)[0]:
-            depth += (ch == "{") - (ch == "}")
-            if depth < 0:
-                raise RulesError(f"{where}: unexpected '}}'")
-    if depth:
-        raise RulesError(f"{where}: {depth} unclosed '{{'")
+    check_identifier("mod.prefix", mod["prefix"])
+    for name, t in targets.items():
+        if "without_dlc" in t and (t["without_dlc"] not in dlcs or "x_without_dlc" not in t):
+            raise RulesError(f"target '{name}': without_dlc must name a key of [dlc], with x_without_dlc set")
+        if "requires_dlc" in t and t["requires_dlc"] not in dlcs:
+            raise RulesError(f"target '{name}': requires_dlc must name a key of [dlc]")
+    validate_rules(rules, targets, categories, dlcs, MAX_STEPS, MAX_PER_CATEGORY)
+    lint.check_rules("hoi4", rules)
 
 
 # --------------------------------------------------------------------------- script
 
-HEADER_COMMENT = "# Generated from rules/hoi4.toml by tools/build.py — edit the rules, not this file.\n\n"
-
-
-def _indent(text, tabs):
-    pad = "\t" * tabs
-    return "\n".join(pad + line if line.strip() else "" for line in text.strip().splitlines())
+HEADER_COMMENT = header_comment("hoi4")
 
 
 def _scripted_triggers(p, rules, by_target, dlcs):
@@ -152,7 +136,7 @@ def _scripted_triggers(p, rules, by_target, dlcs):
             f"{p}_rule_{rule['id']} = {{\n"
             f"\tNOT = {{ has_country_flag = {p}_snooze_{rule['id']} }}\n"
             f"{dlc}"
-            f"{_indent(rule['trigger'], 1)}\n"
+            f"{indent(rule['trigger'], 1)}\n"
             f"}}\n"
         )
     for target_rules in by_target.values():
@@ -170,9 +154,19 @@ def _scripted_triggers(p, rules, by_target, dlcs):
                 f"\t}}\n"
                 f"}}\n"
             )
+    # "Do this next": active, and no rule ranked above it is active.
+    ranked = sorted(rules, key=lambda r: r["rank"])
+    for i, rule in enumerate(ranked):
+        earlier = "".join(f"\t\t{p}_rule_{r['id']} = yes\n" for r in ranked[:i])
+        blocked = f"\tNOT = {{\n\t\tOR = {{\n{_indent_lines(earlier, 1)}\t\t}}\n\t}}\n" if earlier else ""
+        out.append(f"{p}_next_{rule['id']} = {{\n\t{p}_rule_{rule['id']} = yes\n{blocked}}}\n")
     any_active = "".join(f"\t\t{p}_rule_{r['id']} = yes\n" for r in rules)
     out.append(f"{p}_any_active = {{\n\tOR = {{\n{any_active}\t}}\n}}\n")
     return "\n".join(out)
+
+
+def _indent_lines(text, tabs):
+    return "".join("\t" * tabs + line + "\n" for line in text.splitlines())
 
 
 def _toggle_flag(flag):
@@ -199,42 +193,83 @@ def _scripted_gui(name, window, body, parent=None, visible=None):
             f"\t}}\n")
 
 
+def _placements(p, t):
+    """Where a target's badge window goes: [(name suffix, x, y, scripted gui visible trigger or None)].
+
+    Some topbar buttons move when a DLC's button is missing (without La Resistance there is no Intelligence button,
+    and the buttons after it shift left). Such targets get a second window at `x_without_dlc`, shown only then.
+    """
+    if "requires_dlc" in t:
+        # The button only exists with that DLC (e.g. Intelligence needs La Resistance).
+        return [("", t["x"], t["y"], f"{p}_dlc_{t['requires_dlc']} = yes")]
+    if "without_dlc" not in t:
+        return [("", t["x"], t["y"], None)]
+    dlc = f"{p}_dlc_{t['without_dlc']}"
+    return [("", t["x"], t["y"], f"{dlc} = yes"),
+            ("_nodlc", t["x_without_dlc"], t["y"], f"{dlc} = no")]
+
+
 def _section(name, entries):
     inner = "".join(f"\t\t\t{key} = {{\n\t\t\t\t{value}\n\t\t\t}}\n" for key, value in entries)
     return f"\t\t{name} = {{\n{inner}\t\t}}\n"
 
 
-def _scripted_guis(mod, rules, by_target, categories):
+def _scripted_guis(mod, rules, targets, by_target, categories):
     p, parent, days = mod["prefix"], mod["parent_window_token"] or None, mod["snooze_days"]
+    pulse = mod.get("pulse", True)
     guis = []
 
     guis.append(_scripted_gui(
         f"{p}_toggle", f"{p}_toggle_window",
-        _section("effects", [(f"{p}_toggle_button_click", _toggle_flag(f"{p}_panel_open"))]) +
+        _section("effects", [(f"{p}_toggle_button_click",
+                              f"{_toggle_flag(f'{p}_panel_open')}\n\t\t\t\tset_variable = {{ {p}_guide = 0 }}")]) +
         _section("triggers", [(f"{p}_toggle_alert_visible", f"{p}_any_active = yes")]),
         parent=parent,
     ))
 
+    # "Do this next" strip beside the Advisor button; hidden while the panel or a guide is open.
+    effects, triggers = [], []
+    for rule in rules:
+        rid = rule["id"]
+        effects.append((f"{p}_next_{rid}_click", _open_guide(p, rule)))
+        effects.append((f"{p}_next_{rid}_right_click", _snooze(p, rule, days)))
+        triggers.append((f"{p}_next_{rid}_visible", f"{p}_next_{rid} = yes"))
+    guis.append(_scripted_gui(
+        f"{p}_next", f"{p}_next_window",
+        _section("effects", effects) + _section("triggers", triggers),
+        parent=parent,
+        visible=(f"{p}_any_active = yes NOT = {{ has_country_flag = {p}_panel_open }} "
+                 f"NOT = {{ has_country_flag = {p}_hide_next }} check_variable = {{ {p}_guide = 0 }}"),
+    ))
+
     # Topbar badges: left-click opens that rule's guide, right-click snoozes it.
     for target, target_rules in by_target.items():
-        effects, triggers = [], []
-        for rule in target_rules:
-            rid = rule["id"]
-            effects.append((f"{p}_badge_{rid}_click", _open_guide(p, rule)))
-            effects.append((f"{p}_badge_{rid}_right_click", _snooze(p, rule, days)))
-            triggers.append((f"{p}_badge_{rid}_visible", f"{p}_show_{rid} = yes"))
-        guis.append(_scripted_gui(
-            f"{p}_target_{target}", f"{p}_target_{target}_window",
-            _section("effects", effects) + _section("triggers", triggers),
-            parent=parent,
-        ))
+        for suffix, _, _, visible in _placements(p, targets[target]):
+            effects, triggers = [], []
+            for rule in target_rules:
+                rid = rule["id"]
+                effects.append((f"{p}_badge_{rid}{suffix}_click", _open_guide(p, rule)))
+                effects.append((f"{p}_badge_{rid}{suffix}_right_click", _snooze(p, rule, days)))
+                triggers.append((f"{p}_badge_{rid}{suffix}_visible", f"{p}_show_{rid} = yes"))
+            if pulse:
+                # Pulse while this button holds the next move, or while one of its rules' guides is open.
+                cond = " ".join(f"{p}_next_{r['id']} = yes check_variable = {{ {p}_guide = {r['index']} }}"
+                                for r in target_rules)
+                triggers.append((f"{p}_pulse_{target}{suffix}_visible",
+                                 f"OR = {{ has_country_flag = {p}_debug_show_all {cond} }}"))
+            guis.append(_scripted_gui(
+                f"{p}_target_{target}{suffix}", f"{p}_target_{target}{suffix}_window",
+                _section("effects", effects) + _section("triggers", triggers),
+                parent=parent, visible=visible,
+            ))
 
     # Panel: tabs of rule cards. Clicking a card swaps the panel for that rule's guide.
     effects = [
         (f"{p}_close_button_click", f"clr_country_flag = {p}_panel_open"),
         (f"{p}_debug_button_click", _toggle_flag(f"{p}_debug_show_all")),
+        (f"{p}_hide_next_button_click", _toggle_flag(f"{p}_hide_next")),
     ]
-    triggers = []
+    triggers = [(f"{p}_banner_none_visible", f"{p}_any_active = no")]
     for k, cat in enumerate(categories):
         effects.append((f"{p}_tab_{cat}_click", f"set_variable = {{ {p}_tab = {k} }}"))
         triggers.append((f"{p}_tab_{cat}_active_visible", f"check_variable = {{ {p}_tab = {k} }}"))
@@ -252,6 +287,8 @@ def _scripted_guis(mod, rules, by_target, categories):
         triggers.append((f"{p}_row_{rid}_active_visible", f"{p}_rule_{rid} = yes"))
         triggers.append((f"{p}_row_{rid}_snoozed_visible", snoozed))
         triggers.append((f"{p}_row_{rid}_ok_visible", f"{p}_rule_{rid} = no NOT = {{ {snoozed} }}"))
+        effects.append((f"{p}_banner_{rid}_click", f"{_open_guide(p, rule)}\n\t\t\t\tclr_country_flag = {p}_panel_open"))
+        triggers.append((f"{p}_banner_{rid}_visible", f"{p}_next_{rid} = yes"))
     guis.append(_scripted_gui(
         f"{p}_panel", f"{p}_panel_window",
         _section("effects", effects) + _section("triggers", triggers),
@@ -296,7 +333,8 @@ def _panel_layout(by_category):
     n_tabs = len(by_category)
     width = GAP + COLUMNS * (CARD_W + GAP)
     tab_w = (width - 2 * GAP - (n_tabs - 1) * TAB_GAP) // n_tabs
-    tabs_y = HEADER_H + 8
+    banner_y = HEADER_H + 8
+    tabs_y = banner_y + BANNER_H + 8
     cards_y = tabs_y + TAB_H + 10
     rows = math.ceil(max(len(r) for r in by_category.values()) / COLUMNS)
     height = cards_y + rows * (CARD_H + GAP) + FOOTER_H
@@ -305,7 +343,7 @@ def _panel_layout(by_category):
         for i, rule in enumerate(cat_rules):
             cards[rule["id"]] = (GAP + (i % COLUMNS) * (CARD_W + GAP), cards_y + (i // COLUMNS) * (CARD_H + GAP))
     tabs = {cat: (GAP + k * (tab_w + TAB_GAP), tabs_y) for k, cat in enumerate(by_category)}
-    return {"width": width, "height": height, "cards": cards, "tabs": tabs, "tab_w": tab_w}
+    return {"width": width, "height": height, "cards": cards, "tabs": tabs, "tab_w": tab_w, "banner_y": banner_y}
 
 
 def _pos(x, y):
@@ -349,12 +387,21 @@ def _gui(config, by_target, by_category, layout):
     size = TOGGLE_SIZE + ALERT_SIZE // 2
     windows.append(_window(f"{p}_toggle_window", toggle["x"], toggle["y"], size, size, body))
 
+    # "Do this next" strip: one button per rule, only the next move's is visible.
+    body = "".join(_button(f"{p}_next_{r['id']}", 0, 0, f"GFX_{p}_next_bar", f"{p}_{r['id']}_next_tt",
+                           f"{p}_{r['id']}_next") for r in rules)
+    windows.append(_window(f"{p}_next_window", toggle["x"] + size + 6, toggle["y"] + (size - NEXT_H) // 2,
+                           NEXT_W, NEXT_H, body))
+
     # One badge-sized window per topbar button; its badges are stacked and only one is visible at a time.
     for target, target_rules in by_target.items():
-        t = targets[target]
-        body = "".join(_button(f"{p}_badge_{r['id']}", 0, 0, f"GFX_{p}_badge", f"{p}_{r['id']}_tt")
-                       for r in target_rules)
-        windows.append(_window(f"{p}_target_{target}_window", t["x"], t["y"], TOPBAR_BADGE, TOPBAR_BADGE, body))
+        for suffix, x, y, _ in _placements(p, targets[target]):
+            body = "".join(_button(f"{p}_badge_{r['id']}{suffix}", 0, 0, f"GFX_{p}_badge", f"{p}_{r['id']}_tt")
+                           for r in target_rules)
+            if mod.get("pulse", True):
+                # Drawn over the badges but click-through, so the badge underneath still gets the click.
+                body += _icon(f"{p}_pulse_{target}{suffix}", 0, 0, f"GFX_{p}_pulse", transparent=True)
+            windows.append(_window(f"{p}_target_{target}{suffix}_window", x, y, TOPBAR_BADGE, TOPBAR_BADGE, body))
 
     # The Advisor panel: tabs, then one card per rule (cards of other tabs are hidden).
     w, h = layout["width"], layout["height"]
@@ -362,6 +409,12 @@ def _gui(config, by_target, by_category, layout):
     body += _text(f"{p}_panel_title", 18, 10, f"{p}_panel_title", "hoi_20bs", w - 80, 24)
     body += _text(f"{p}_panel_subtitle", 18, 31, f"{p}_panel_subtitle", "hoi_16mbs", w - 80, 18)
     body += _button(f"{p}_close_button", w - 36, 12, f"GFX_{p}_close_button", f"{p}_close_tt")
+    bx, by = GAP, layout["banner_y"]
+    for rule in rules:
+        body += _button(f"{p}_banner_{rule['id']}", bx, by, f"GFX_{p}_banner", f"{p}_{rule['id']}_next_tt",
+                        f"{p}_{rule['id']}_banner")
+    body += _icon(f"{p}_banner_none", bx, by, f"GFX_{p}_banner")
+    body += _text(f"{p}_banner_none_text", bx + 14, by + 9, f"{p}_banner_none", "hoi_16mbs", w - 2 * GAP - 28, 18)
     for cat, (tx, ty) in layout["tabs"].items():
         body += _button(f"{p}_tab_{cat}", tx, ty, f"GFX_{p}_tab", label=f"{p}_tab_{cat}")
         body += _icon(f"{p}_tab_{cat}_active", tx, ty, f"GFX_{p}_tab_active", transparent=True)
@@ -379,8 +432,10 @@ def _gui(config, by_target, by_category, layout):
         body += _window(f"{p}_card_{rid}", cx, cy, CARD_W, CARD_H, card)
     fy = h - FOOTER_H + (FOOTER_H - FOOTER_BUTTON_H) // 2
     body += _button(f"{p}_debug_button", GAP + 2, fy, f"GFX_{p}_text_button", f"{p}_debug_tt", f"{p}_debug_label")
-    body += _text(f"{p}_footer_hint", GAP + FOOTER_BUTTON_W + 16, fy + 6, f"{p}_footer_hint", "hoi_16mbs",
-                  w - FOOTER_BUTTON_W - 40, 18)
+    body += _button(f"{p}_hide_next_button", GAP + FOOTER_BUTTON_W + 10, fy, f"GFX_{p}_text_button",
+                    f"{p}_hide_next_tt", f"{p}_hide_next_label")
+    hint_x = GAP + 2 * (FOOTER_BUTTON_W + 10) + 6
+    body += _text(f"{p}_footer_hint", hint_x, fy + 6, f"{p}_footer_hint", "hoi_16mbs", w - hint_x - GAP, 18)
     windows.append(_window(f"{p}_panel_window", -w // 2, -h // 2, w, h, body, orientation="CENTER", moveable=True))
 
     # The guide: one page per rule; each page holds the title, every step, and the explanation.
@@ -410,14 +465,22 @@ def _gui(config, by_target, by_category, layout):
 
 
 SPRITES = ["badge", "badge_small", "badge_panel", "ok", "snoozed", "advisor_button", "close_button",
-           "text_button", "panel_bg", "card", "tab", "tab_active", "guide_bg", "guide_button"]
+           "text_button", "panel_bg", "card", "tab", "tab_active", "guide_bg", "guide_button", "banner", "next_bar",
+           "pulse"]
 CLICKABLE = {"badge", "badge_panel", "snoozed", "advisor_button", "close_button", "text_button", "card", "tab",
-             "guide_button"}
+             "guide_button", "banner", "next_bar"}
+ANIMATED = {"pulse": PULSE_FRAMES}  # frame strips, laid out left to right
 
 
 def _gfx(p):
     entries = []
     for name in SPRITES:
+        if name in ANIMATED:
+            entries.append(f"\tframeAnimatedSpriteType = {{\n\t\tname = \"GFX_{p}_{name}\"\n"
+                           f"\t\ttexturefile = \"gfx/interface/{p}/{name}.dds\"\n"
+                           f"\t\tnoOfFrames = {ANIMATED[name]}\n\t\tanimation_rate_fps = 10\n"
+                           f"\t\tlooping = yes\n\t\tplay_on_show = yes\n\t}}\n")
+            continue
         fx = '\n\t\teffectFile = "gfx/FX/buttonstate.lua"' if name in CLICKABLE else ""
         entries.append(f"\tspriteType = {{\n\t\tname = \"GFX_{p}_{name}\"\n"
                        f"\t\ttexturefile = \"gfx/interface/{p}/{name}.dds\"{fx}\n\t}}\n")
@@ -438,8 +501,11 @@ def _textures(out_dir, layout):
         "card": art.card(CARD_W, CARD_H),
         "tab": art.text_button(layout["tab_w"], TAB_H),
         "tab_active": art.tab_highlight(layout["tab_w"], TAB_H),
-        "guide_bg": art.panel_background(GUIDE_W, GUIDE_H, GUIDE_HEADER, boxes=[STEP_BOX, WHY_BOX]),
+        "guide_bg": art.panel_background(GUIDE_W, GUIDE_H, GUIDE_HEADER, boxes=(STEP_BOX, WHY_BOX)),
         "guide_button": art.text_button(GUIDE_BUTTON_W, GUIDE_BUTTON_H),
+        "banner": art.banner(layout["width"] - 2 * GAP, BANNER_H),
+        "next_bar": art.banner(NEXT_W, NEXT_H),
+        "pulse": art.pulse_strip(TOPBAR_BADGE, PULSE_FRAMES),
     }
     assert set(canvases) == set(SPRITES)
     for name, canvas in canvases.items():
@@ -450,39 +516,19 @@ def _textures(out_dir, layout):
 
 # HOI4 only loads the file for the language the game runs in; it never falls back to English.
 # So every language gets a file, using English for anything not translated yet.
-LANGUAGES = ["english", "simp_chinese", "braz_por", "french", "german", "japanese", "polish", "russian", "spanish"]
-
-
-def _validate_locales(locales, rules, targets, categories):
-    if "english" not in locales:
-        raise RulesError("rules/locale/hoi4/english.toml is missing")
-    by_id = {r["id"]: r for r in rules}
-    for lang, loc in locales.items():
-        if lang not in LANGUAGES:
-            raise RulesError(f"locale '{lang}' is not a HOI4 language (expected one of {', '.join(LANGUAGES)})")
-        for key in ("ui", "targets", "categories", "rules"):
-            known = {"ui": locales["english"]["ui"], "targets": targets, "categories": categories,
-                     "rules": by_id}[key]
-            for name in loc.get(key, {}):
-                if name not in known:
-                    raise RulesError(f"locale '{lang}': unknown {key} entry '{name}'")
-        for value in [*loc.get("ui", {}).values(), *loc.get("targets", {}).values(),
-                      *loc.get("categories", {}).values()]:
-            _check_text(f"locale '{lang}'", value)
-        for rid, text in loc.get("rules", {}).items():
-            for field, value in text.items():
-                if field not in ("title", "advice", "why", "steps"):
-                    raise RulesError(f"locale '{lang}': rule '{rid}' has unknown field '{field}'")
-                for v in value if field == "steps" else [value]:
-                    _check_text(f"locale '{lang}': rule '{rid}' {field}", v)
-            if "steps" in text and len(text["steps"]) != len(by_id[rid]["steps"]):
-                raise RulesError(f"locale '{lang}': rule '{rid}' has {len(text['steps'])} steps, "
-                                 f"English has {len(by_id[rid]['steps'])}")
+LANGUAGES = ["english", "simp_chinese", "braz_por", "french", "german", "japanese", "korean", "polish", "russian",
+             "spanish"]
+# Text keys the .gui references directly; the others are templates used to compose rule text.
+GUI_TEXT_KEYS = ("toggle_tt", "close_tt", "panel_title", "panel_subtitle", "debug_label", "debug_tt", "footer_hint",
+                 "guide_subtitle", "guide_back", "guide_next", "guide_done", "guide_all", "hide_next_label",
+                 "hide_next_tt", "banner_none")
+UI_KEYS = GUI_TEXT_KEYS + ("desc_where", "badge_hint", "row_hint", "snoozed_tt", "card_tt", "guide_step", "guide_why",
+                           "none_label", "next_prefix", "next_hint")
 
 
 def _localisations(mod, rules, targets, categories, locales):
     """Returns {relative path: file text} for every HOI4 language."""
-    _validate_locales(locales, rules, targets, categories)
+    validate_locales("hoi4", locales, LANGUAGES, rules, targets, categories, UI_KEYS)
     english = locales["english"]
     return {f"localisation/{lang}/{mod['prefix']}_advisor_l_{lang}.yml":
             _localisation(lang, mod, rules, targets, categories, english, locales.get(lang, {}))
@@ -496,14 +542,12 @@ def _localisation(lang, mod, rules, targets, categories, english, loc):
     def fmt(key, **kw):
         return ui[key].format(days=days, **kw)
 
-    entries = {f"{p}_{key}": fmt(key) for key in
-               ("toggle_tt", "close_tt", "panel_title", "panel_subtitle", "debug_label", "debug_tt", "footer_hint",
-                "guide_subtitle", "guide_back", "guide_next", "guide_done", "guide_all")}
+    entries = {f"{p}_{key}": fmt(key) for key in UI_KEYS if key in GUI_TEXT_KEYS}
     for cat, label in categories.items():
         entries[f"{p}_tab_{cat}"] = loc.get("categories", {}).get(cat, label)
     for rule in rules:
         rid = rule["id"]
-        text = {**{k: rule[k] for k in ("title", "advice", "why", "steps")}, **loc.get("rules", {}).get(rid, {})}
+        text = rule_text(rule, loc)
         if rule["target"] == "none":
             label = fmt("none_label")
         else:
@@ -515,6 +559,9 @@ def _localisation(lang, mod, rules, targets, categories, english, loc):
         entries[f"{p}_{rid}_row_tt"] = f"{body}\n\n{fmt('row_hint')}"
         entries[f"{p}_{rid}_card_tt"] = f"§Y{text['title']}§!\n{text['advice']}\n\n{fmt('card_tt')}"
         entries[f"{p}_{rid}_snoozed_tt"] = fmt("snoozed_tt", title=text["title"])
+        entries[f"{p}_{rid}_next"] = f"§Y{fmt('next_prefix')}§! {text['title']}"
+        entries[f"{p}_{rid}_banner"] = f"§Y{fmt('next_prefix')}§! {text['title']}  §g{label}§!"
+        entries[f"{p}_{rid}_next_tt"] = f"{body}\n\n{fmt('next_hint', label=label)}"
         total = len(text["steps"])
         for n, step in enumerate(text["steps"], 1):
             entries[f"{p}_{rid}_step_{n}"] = f"§Y{fmt('guide_step', n=n, total=total)}§!\n\n{step}"
